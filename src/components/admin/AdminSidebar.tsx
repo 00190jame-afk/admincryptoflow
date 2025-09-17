@@ -22,6 +22,7 @@ import {
   Settings,
   Shield,
   FileText,
+  Activity,
 } from 'lucide-react';
 
 const mainItems = [
@@ -39,6 +40,8 @@ const superAdminItems = [
 const reportItems = [
   { title: 'Reports & Analytics', url: '/admin/reports', icon: BarChart3 },
   { title: 'Audit Logs', url: '/admin/audit', icon: FileText },
+  { title: 'Security Center', url: '/admin/security', icon: Shield },
+  { title: 'System Health', url: '/admin/health', icon: Activity },
   { title: 'Settings', url: '/admin/settings', icon: Settings },
 ];
 
