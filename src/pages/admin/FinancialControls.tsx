@@ -66,6 +66,9 @@ const FinancialControls = () => {
   };
 
   const processWithdrawRequest = async (requestId: string, action: 'approved' | 'rejected', notes?: string) => {
+    // Prevent multiple calls if already processing this request
+    if (processing === requestId) return;
+    
     setProcessing(requestId);
     try {
       const updateData: any = {
@@ -80,7 +83,8 @@ const FinancialControls = () => {
       const { error } = await supabase
         .from('withdraw_requests')
         .update(updateData)
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .eq('status', 'pending'); // Only update if still pending to prevent double processing
 
       if (error) throw error;
 
