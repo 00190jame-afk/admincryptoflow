@@ -5,6 +5,7 @@ import { AdminSidebar } from './AdminSidebar';
 import { AdminHeader } from './AdminHeader';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Loader2 } from 'lucide-react';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 
 const AdminLayout = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -33,17 +34,19 @@ const AdminLayout = () => {
   }
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <AdminSidebar />
-        <div className="flex-1">
-          <AdminHeader />
-          <main className="p-6">
-            <Outlet />
-          </main>
+    <NotificationProvider>
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full">
+          <AdminSidebar />
+          <div className="flex-1">
+            <AdminHeader />
+            <main className="p-6">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </NotificationProvider>
   );
 };
 

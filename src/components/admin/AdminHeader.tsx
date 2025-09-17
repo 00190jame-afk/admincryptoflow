@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LogOut, User, Shield } from 'lucide-react';
+import { NotificationControls } from './NotificationControls';
 
 export function AdminHeader() {
   const { user, signOut, isSuperAdmin } = useAuth();
@@ -35,7 +36,9 @@ export function AdminHeader() {
         </div>
       </div>
 
-      <DropdownMenu>
+      <div className="flex items-center gap-4">
+        <NotificationControls />
+        <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
             <Avatar className="h-10 w-10">
@@ -65,7 +68,8 @@ export function AdminHeader() {
             <span>Log out</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }
