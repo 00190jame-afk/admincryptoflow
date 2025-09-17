@@ -43,6 +43,7 @@ const FinancialControls = () => {
     description: ''
   });
   const [adjusting, setAdjusting] = useState(false);
+  const [notesByRequest, setNotesByRequest] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchWithdrawRequests();
@@ -395,6 +396,18 @@ const FinancialControls = () => {
                                     <p className="text-sm font-mono">${request.amount.toFixed(2)}</p>
                                   </div>
                                 </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`notes-${request.id}`}>Admin Notes</Label>
+                                  <Textarea
+                                    id={`notes-${request.id}`}
+                                    placeholder="Required when rejecting..."
+                                    value={notesByRequest[request.id] || ''}
+                                    onChange={(e) =>
+                                      setNotesByRequest((prev) => ({ ...prev, [request.id]: e.target.value }))
+                                    }
+                                  />
+                                  <p className="text-xs text-muted-foreground">Notes are required to Reject.</p>
+                                </div>
                                 <div className="flex space-x-4">
                                   <Button
                                     onClick={() => processWithdrawRequest(request.id, 'approved')}
@@ -405,7 +418,18 @@ const FinancialControls = () => {
                                     Approve
                                   </Button>
                                   <Button
-                                    onClick={() => processWithdrawRequest(request.id, 'rejected', 'Rejected by admin')}
+                                    onClick={() => {
+                                      const notes = (notesByRequest[request.id] || '').trim();
+                                      if (!notes) {
+                                        toast({
+                                          title: 'Notes required',
+                                          description: 'Please provide a reason to reject this withdrawal.',
+                                          variant: 'destructive',
+                                        });
+                                        return;
+                                      }
+                                      processWithdrawRequest(request.id, 'rejected', notes);
+                                    }}
                                     disabled={processing === request.id}
                                     variant="destructive"
                                   >

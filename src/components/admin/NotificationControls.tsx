@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { Separator } from '@/components/ui/separator';
+import { notificationAudio } from '@/lib/NotificationAudio';
 
 export const NotificationControls = () => {
   const { counts, isEnabled, volume, setEnabled, setVolume, markAsRead } = useNotifications();
@@ -117,7 +118,7 @@ export const NotificationControls = () => {
           {isEnabled && (
             <>
               <Separator />
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   {volume > 0 ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
                   <span className="text-sm">Volume</span>
@@ -130,6 +131,11 @@ export const NotificationControls = () => {
                   step={0.1}
                   className="w-full"
                 />
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => notificationAudio.play()}>
+                    Test sound
+                  </Button>
+                </div>
               </div>
             </>
           )}
