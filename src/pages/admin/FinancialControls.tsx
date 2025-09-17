@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -44,6 +44,7 @@ const FinancialControls = () => {
   });
   const [adjusting, setAdjusting] = useState(false);
   const [notesByRequest, setNotesByRequest] = useState<Record<string, string>>({});
+  const processingRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetchWithdrawRequests();
@@ -67,8 +68,9 @@ const FinancialControls = () => {
 
   const processWithdrawRequest = async (requestId: string, action: 'approved' | 'rejected', notes?: string) => {
     // Prevent multiple calls if already processing this request
-    if (processing === requestId) return;
-    
+    if (processing === requestId || processingRef.current.has(requestId)) return;
+    // Lock immediately to avoid rapid double click before state updates
+    processingRef.current.add(requestId);
     setProcessing(requestId);
     try {
       const updateData: any = {
@@ -103,6 +105,7 @@ const FinancialControls = () => {
       });
     } finally {
       setProcessing(null);
+      processingRef.current.delete(requestId);
     }
   };
 
@@ -415,7 +418,7 @@ const FinancialControls = () => {
                                 <div className="flex space-x-4">
                                   <Button
                                     onClick={() => processWithdrawRequest(request.id, 'approved')}
-                                    disabled={processing === request.id}
+                                    disabled={processing === request.id || processingRef.current.has(request.id)}
                                     className="bg-green-600 hover:bg-green-700"
                                   >
                                     <CheckCircle className="mr-2 h-4 w-4" />
@@ -434,7 +437,7 @@ const FinancialControls = () => {
                                       }
                                       processWithdrawRequest(request.id, 'rejected', notes);
                                     }}
-                                    disabled={processing === request.id}
+                                    disabled={processing === request.id || processingRef.current.has(request.id)}
                                     variant="destructive"
                                   >
                                     <XCircle className="mr-2 h-4 w-4" />
