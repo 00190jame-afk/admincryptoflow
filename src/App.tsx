@@ -12,6 +12,10 @@ import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
+import InviteCodeManagement from "./pages/admin/InviteCodeManagement";
+import FinancialControls from "./pages/admin/FinancialControls";
+import AuditLogs from "./pages/admin/AuditLogs";
+import Settings from "./pages/admin/Settings";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +34,10 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="trades" element={<TradeManagement />} />
               <Route path="admins" element={<AdminManagement />} />
+              <Route path="invites" element={<InviteCodeManagement />} />
+              <Route path="finance" element={<FinancialControls />} />
+              <Route path="audit" element={<AuditLogs />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
