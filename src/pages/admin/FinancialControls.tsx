@@ -68,8 +68,8 @@ const FinancialControls = () => {
     setProcessing(requestId);
     try {
       const updateData: any = {
-        status: action,
-        processed_at: new Date().toISOString()
+        status: action
+        // Don't set processed_at here - let the database trigger handle it
       };
 
       if (notes) {
