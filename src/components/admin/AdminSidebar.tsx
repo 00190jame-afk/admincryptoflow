@@ -23,13 +23,19 @@ import {
   Shield,
   FileText,
   Activity,
+  MessageSquare,
+  Mail,
+  CreditCard,
 } from 'lucide-react';
 
 const mainItems = [
   { title: 'Dashboard', url: '/admin', icon: LayoutDashboard },
   { title: 'User Management', url: '/admin/users', icon: Users },
   { title: 'Trade Management', url: '/admin/trades', icon: TrendingUp },
+  { title: 'User Messages', url: '/admin/messages', icon: MessageSquare },
+  { title: 'Contact Messages', url: '/admin/contact', icon: Mail },
   { title: 'Invite Codes', url: '/admin/invites', icon: Gift },
+  { title: 'Recharge Codes', url: '/admin/recharge', icon: CreditCard },
   { title: 'Financial Controls', url: '/admin/finance', icon: DollarSign },
 ];
 

@@ -18,6 +18,9 @@ import AuditLogs from "./pages/admin/AuditLogs";
 import SecurityCenter from "./pages/admin/SecurityCenter";
 import SystemHealth from "./pages/admin/SystemHealth";
 import Settings from "./pages/admin/Settings";
+import ContactMessages from "./pages/admin/ContactMessages";
+import UserMessages from "./pages/admin/UserMessages";
+import RechargeCodeManagement from "./pages/admin/RechargeCodeManagement";
 
 const queryClient = new QueryClient();
 
@@ -36,7 +39,10 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="trades" element={<TradeManagement />} />
               <Route path="admins" element={<AdminManagement />} />
+              <Route path="messages" element={<UserMessages />} />
+              <Route path="contact" element={<ContactMessages />} />
               <Route path="invites" element={<InviteCodeManagement />} />
+              <Route path="recharge" element={<RechargeCodeManagement />} />
               <Route path="finance" element={<FinancialControls />} />
               <Route path="audit" element={<AuditLogs />} />
               <Route path="security" element={<SecurityCenter />} />
