@@ -295,9 +295,9 @@ const TradeManagement = () => {
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Set Trade Result</DialogTitle>
+                                <DialogTitle>Set as Win</DialogTitle>
                                 <DialogDescription>
-                                  Manually set the result for trade {trade.id.substring(0, 8)}...
+                                  Set trade {trade.id.substring(0, 8)}... as winning trade.
                                   <br />
                                   <span className="font-medium">
                                     {trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}
@@ -311,7 +311,7 @@ const TradeManagement = () => {
                                     The system will automatically process payouts and update user balances.
                                   </AlertDescription>
                                 </Alert>
-                                <div className="flex space-x-4">
+                               <div className="flex justify-center">
                                   <Button
                                     onClick={() => updateTradeResult(trade.id, 'win')}
                                     disabled={updating === trade.id}
@@ -323,20 +323,6 @@ const TradeManagement = () => {
                                       <>
                                         <CheckCircle className="mr-2 h-4 w-4" />
                                         Set as Win
-                                      </>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    onClick={() => updateTradeResult(trade.id, 'lose')}
-                                    disabled={updating === trade.id}
-                                    variant="destructive"
-                                  >
-                                    {updating === trade.id ? (
-                                      <>Processing...</>
-                                    ) : (
-                                      <>
-                                        <XCircle className="mr-2 h-4 w-4" />
-                                        Set as Lose
                                       </>
                                     )}
                                   </Button>
