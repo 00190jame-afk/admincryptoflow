@@ -14,9 +14,7 @@ import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
 import InviteCodeManagement from "./pages/admin/InviteCodeManagement";
 import FinancialControls from "./pages/admin/FinancialControls";
-import AuditLogs from "./pages/admin/AuditLogs";
 import SecurityCenter from "./pages/admin/SecurityCenter";
-import SystemHealth from "./pages/admin/SystemHealth";
 import Settings from "./pages/admin/Settings";
 import ContactMessages from "./pages/admin/ContactMessages";
 import UserMessages from "./pages/admin/UserMessages";
@@ -44,9 +42,7 @@ const App = () => (
               <Route path="invites" element={<InviteCodeManagement />} />
               <Route path="recharge" element={<RechargeCodeManagement />} />
               <Route path="finance" element={<FinancialControls />} />
-              <Route path="audit" element={<AuditLogs />} />
               <Route path="security" element={<SecurityCenter />} />
-              <Route path="health" element={<SystemHealth />} />
               <Route path="settings" element={<Settings />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
