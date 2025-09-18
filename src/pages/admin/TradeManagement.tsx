@@ -78,6 +78,8 @@ const TradeManagement = () => {
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
     setUpdating(tradeId);
     try {
+      console.log('Updating trade:', tradeId, 'to result:', result);
+      
       const { error } = await supabase
         .from('trades')
         .update({ 
@@ -88,7 +90,7 @@ const TradeManagement = () => {
         .eq('id', tradeId);
 
       if (error) {
-        console.error('Error updating trade:', error);
+        console.error('Supabase error updating trade:', error);
         toast({
           title: "Error",
           description: `Failed to update trade: ${error.message}`,
@@ -97,19 +99,19 @@ const TradeManagement = () => {
         return;
       }
       
+      console.log('Trade updated successfully:', tradeId, result);
       toast({
-        title: "Trade Updated",
-        description: `Trade marked as ${result} successfully`,
-        variant: "default",
+        title: "Success",
+        description: `Trade marked as ${result.toUpperCase()} successfully`,
       });
       
-      setDialogOpen(null); // Close the dialog
-      fetchTrades(); // Refresh the list
+      setDialogOpen(null);
+      await fetchTrades(); // Refresh the list to reflect changes
     } catch (error) {
-      console.error('Error updating trade:', error);
+      console.error('Unexpected error updating trade:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "An unexpected error occurred while updating the trade",
         variant: "destructive",
       });
     } finally {
