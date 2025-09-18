@@ -79,40 +79,56 @@ const TradeManagement = () => {
     setUpdating(tradeId);
     try {
       console.log('Updating trade:', tradeId, 'to result:', result);
-      
-      const { error } = await supabase
+
+      // Only update pending trades and require returning row to confirm success
+      const { data, error } = await supabase
         .from('trades')
-        .update({ 
+        .update({
           status: result,
           result: result,
-          completed_at: new Date().toISOString()
         })
-        .eq('id', tradeId);
+        .eq('id', tradeId)
+        .eq('status', 'pending')
+        .select('id,status,result,updated_at')
+        .maybeSingle();
 
       if (error) {
         console.error('Supabase error updating trade:', error);
         toast({
-          title: "Error",
+          title: 'Error',
           description: `Failed to update trade: ${error.message}`,
-          variant: "destructive",
+          variant: 'destructive',
         });
         return;
       }
-      
-      console.log('Trade updated successfully:', tradeId, result);
+
+      if (!data) {
+        console.warn('No row updated. Likely not pending or lacking permission (RLS).');
+        toast({
+          title: 'No changes made',
+          description:
+            'Trade was not updated. It may no longer be pending or you may not have permission.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      console.log('Trade updated successfully:', tradeId, result, data);
       toast({
-        title: "Success",
+        title: 'Success',
         description: `Trade marked as ${result.toUpperCase()} successfully`,
       });
-      
+
       setDialogOpen(null);
-      await fetchTrades(); // Refresh the list to reflect changes
+      // Optimistically update local state so actions hide immediately
+      setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
+      await fetchTrades(); // Ensure fresh data and trigger any UI updates
     } catch (error) {
       console.error('Unexpected error updating trade:', error);
       toast({
-        title: "Error",
-        description: "An unexpected error occurred while updating the trade",
-        variant: "destructive",
+        title: 'Error',
+        description: 'An unexpected error occurred while updating the trade',
+        variant: 'destructive',
       });
     } finally {
       setUpdating(null);
