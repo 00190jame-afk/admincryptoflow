@@ -10,6 +10,7 @@ import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle } from 'l
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Trade {
   id: string;
@@ -31,6 +32,7 @@ interface Trade {
 
 const TradeManagement = () => {
   const { toast } = useToast();
+  const { isSuperAdmin } = useAuth();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +46,7 @@ const TradeManagement = () => {
 
   const fetchTrades = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('trades')
         .select(`
           id,
@@ -62,7 +64,27 @@ const TradeManagement = () => {
           created_at,
           ends_at,
           completed_at
-        `)
+        `);
+
+      // If not super admin, filter to only assigned users
+      if (!isSuperAdmin) {
+        const { data: assignedUsers } = await supabase
+          .rpc('get_admin_assigned_users', { 
+            p_admin_user_id: (await supabase.auth.getUser()).data.user?.id 
+          });
+        
+        if (assignedUsers && assignedUsers.length > 0) {
+          const userIds = assignedUsers.map((u: any) => u.user_id);
+          query = query.in('user_id', userIds);
+        } else {
+          // If no assigned users, return empty array
+          setTrades([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(100);
 

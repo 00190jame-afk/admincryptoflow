@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, Eye, DollarSign, UserCheck, UserX } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface User {
   id: string;
@@ -21,6 +22,7 @@ interface User {
 }
 
 const UserManagement = () => {
+  const { isSuperAdmin } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,7 +34,7 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data: profiles, error } = await supabase
+      let profilesQuery = supabase
         .from('profiles')
         .select(`
           id,
@@ -42,7 +44,27 @@ const UserManagement = () => {
           last_name,
           is_verified,
           created_at
-        `)
+        `);
+
+      // If not super admin, filter to only assigned users
+      if (!isSuperAdmin) {
+        const { data: assignedUsers } = await supabase
+          .rpc('get_admin_assigned_users', { 
+            p_admin_user_id: (await supabase.auth.getUser()).data.user?.id 
+          });
+        
+        if (assignedUsers && assignedUsers.length > 0) {
+          const userIds = assignedUsers.map((u: any) => u.user_id);
+          profilesQuery = profilesQuery.in('user_id', userIds);
+        } else {
+          // If no assigned users, return empty array
+          setUsers([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data: profiles, error } = await profilesQuery
         .order('created_at', { ascending: false });
 
       if (error) throw error;
