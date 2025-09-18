@@ -89,7 +89,7 @@ const TradeManagement = () => {
         })
         .eq('id', tradeId)
         .eq('status', 'pending')
-        .select('id,status,result,updated_at')
+        .select('id,status,result')
         .maybeSingle();
 
       if (error) {
