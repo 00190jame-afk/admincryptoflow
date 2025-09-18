@@ -80,20 +80,13 @@ const TradeManagement = () => {
     try {
       console.log('Updating trade:', tradeId, 'to result:', result);
 
-      // Only update pending trades and require returning row to confirm success
-      const { data, error } = await supabase
-        .from('trades')
-        .update({
-          status: result,
-          result: result,
-        })
-        .eq('id', tradeId)
-        .eq('status', 'pending')
-        .select('id,status,result')
-        .maybeSingle();
+      // Call the edge function to update trade status
+      const { data, error } = await supabase.functions.invoke('set-trade-win', {
+        body: { tradeId }
+      });
 
       if (error) {
-        console.error('Supabase error updating trade:', error);
+        console.error('Edge function error:', error);
         toast({
           title: 'Error',
           description: `Failed to update trade: ${error.message}`,
@@ -102,12 +95,11 @@ const TradeManagement = () => {
         return;
       }
 
-      if (!data) {
-        console.warn('No row updated. Likely not pending or lacking permission (RLS).');
+      if (data.error) {
+        console.error('Edge function returned error:', data.error);
         toast({
-          title: 'No changes made',
-          description:
-            'Trade was not updated. It may no longer be pending or you may not have permission.',
+          title: 'Error',
+          description: data.error,
           variant: 'destructive',
         });
         return;
