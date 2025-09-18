@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
 
 interface Trade {
   id: string;
@@ -29,11 +30,13 @@ interface Trade {
 }
 
 const TradeManagement = () => {
+  const { toast } = useToast();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTrades();
@@ -84,11 +87,31 @@ const TradeManagement = () => {
         })
         .eq('id', tradeId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating trade:', error);
+        toast({
+          title: "Error",
+          description: `Failed to update trade: ${error.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
       
+      toast({
+        title: "Trade Updated",
+        description: `Trade marked as ${result} successfully`,
+        variant: "default",
+      });
+      
+      setDialogOpen(null); // Close the dialog
       fetchTrades(); // Refresh the list
     } catch (error) {
       console.error('Error updating trade:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setUpdating(null);
     }
@@ -243,7 +266,10 @@ const TradeManagement = () => {
                     <TableCell>
                       {trade.status === 'pending' && (
                         <div className="flex space-x-2">
-                          <Dialog>
+                          <Dialog 
+                            open={dialogOpen === trade.id} 
+                            onOpenChange={(open) => setDialogOpen(open ? trade.id : null)}
+                          >
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm">
                                 Set Result
@@ -254,12 +280,17 @@ const TradeManagement = () => {
                                 <DialogTitle>Set Trade Result</DialogTitle>
                                 <DialogDescription>
                                   Manually set the result for trade {trade.id.substring(0, 8)}...
+                                  <br />
+                                  <span className="font-medium">
+                                    {trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}
+                                  </span>
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <Alert>
                                   <AlertDescription>
-                                    This action will permanently set the trade result and cannot be undone.
+                                    This action will permanently set the trade result and cannot be undone. 
+                                    The system will automatically process payouts and update user balances.
                                   </AlertDescription>
                                 </Alert>
                                 <div className="flex space-x-4">
@@ -268,16 +299,28 @@ const TradeManagement = () => {
                                     disabled={updating === trade.id}
                                     className="bg-green-600 hover:bg-green-700"
                                   >
-                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                    Set as Win
+                                    {updating === trade.id ? (
+                                      <>Processing...</>
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                        Set as Win
+                                      </>
+                                    )}
                                   </Button>
                                   <Button
                                     onClick={() => updateTradeResult(trade.id, 'lose')}
                                     disabled={updating === trade.id}
                                     variant="destructive"
                                   >
-                                    <XCircle className="mr-2 h-4 w-4" />
-                                    Set as Lose
+                                    {updating === trade.id ? (
+                                      <>Processing...</>
+                                    ) : (
+                                      <>
+                                        <XCircle className="mr-2 h-4 w-4" />
+                                        Set as Lose
+                                      </>
+                                    )}
                                   </Button>
                                 </div>
                               </div>
