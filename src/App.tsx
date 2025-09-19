@@ -12,13 +12,13 @@ import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
-import InviteCodeManagement from "./pages/admin/InviteCodeManagement";
-import FinancialControls from "./pages/admin/FinancialControls";
 import SecurityCenter from "./pages/admin/SecurityCenter";
 import Settings from "./pages/admin/Settings";
 import ContactMessages from "./pages/admin/ContactMessages";
 import UserMessages from "./pages/admin/UserMessages";
 import RechargeCodeManagement from "./pages/admin/RechargeCodeManagement";
+import UserBalance from "./pages/admin/UserBalance";
+import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
 
 const queryClient = new QueryClient();
 
@@ -39,9 +39,9 @@ const App = () => (
               <Route path="admins" element={<AdminManagement />} />
               <Route path="messages" element={<UserMessages />} />
               <Route path="contact" element={<ContactMessages />} />
-              <Route path="invites" element={<InviteCodeManagement />} />
               <Route path="recharge" element={<RechargeCodeManagement />} />
-              <Route path="finance" element={<FinancialControls />} />
+              <Route path="balance" element={<UserBalance />} />
+              <Route path="withdrawals" element={<WithdrawalRequests />} />
               <Route path="security" element={<SecurityCenter />} />
               <Route path="settings" element={<Settings />} />
             </Route>
