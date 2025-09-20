@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Clock, CheckCircle, XCircle, CreditCard, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface WithdrawRequest {
   id: string;
@@ -23,23 +24,42 @@ interface WithdrawRequest {
   email?: string;
 }
 
+interface UserProfile {
+  user_id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+}
+
 const WithdrawalRequests = () => {
   const [requests, setRequests] = useState<WithdrawRequest[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawRequest | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const { toast } = useToast();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
   useEffect(() => {
-    fetchWithdrawRequests();
-  }, []);
+    if (!adminLoading) {
+      fetchWithdrawRequests();
+      fetchProfiles();
+    }
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
   const fetchWithdrawRequests = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('withdraw_requests')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Filter withdrawal requests for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setRequests(data || []);
@@ -52,6 +72,26 @@ const WithdrawalRequests = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProfiles = async () => {
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('user_id, email, first_name, last_name');
+
+      // Filter profiles for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setProfiles(data || []);
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
     }
   };
 
@@ -115,6 +155,18 @@ const WithdrawalRequests = () => {
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const getUserProfile = (userId: string) => {
+    return profiles.find(p => p.user_id === userId);
+  };
+
+  const getUserDisplayName = (userId: string) => {
+    const profile = getUserProfile(userId);
+    if (profile?.first_name && profile?.last_name) {
+      return `${profile.first_name} ${profile.last_name}`;
+    }
+    return profile?.email || `User ${userId.substring(0, 8)}`;
   };
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
@@ -196,10 +248,10 @@ const WithdrawalRequests = () => {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">User {request.user_id.substring(0, 8)}</div>
-                        {request.email && (
-                          <div className="text-sm text-muted-foreground">{request.email}</div>
-                        )}
+                        <div className="font-medium">{getUserDisplayName(request.user_id)}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {getUserProfile(request.user_id)?.email}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">

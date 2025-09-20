@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Wallet, Plus, Minus, Search, DollarSign } from 'lucide-react';
+import { Wallet, Plus, Minus, Search, DollarSign, Lock, Unlock, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface UserBalance {
   id: string;
@@ -38,19 +39,30 @@ const UserBalance = () => {
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [adjustmentDescription, setAdjustmentDescription] = useState('');
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
+  const [actionType, setActionType] = useState<'adjust' | 'freeze' | 'unfreeze' | 'hold' | 'release'>('adjust');
   const { toast } = useToast();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
   useEffect(() => {
-    fetchUserBalances();
-    fetchProfiles();
-  }, []);
+    if (!adminLoading) {
+      fetchUserBalances();
+      fetchProfiles();
+    }
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
   const fetchUserBalances = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('user_balances')
         .select('*')
         .order('updated_at', { ascending: false });
+
+      // Filter balances for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setBalances(data || []);
@@ -68,9 +80,16 @@ const UserBalance = () => {
 
   const fetchProfiles = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
         .select('user_id, email, first_name, last_name');
+
+      // Filter profiles for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setProfiles(data || []);
@@ -79,26 +98,54 @@ const UserBalance = () => {
     }
   };
 
-  const adjustUserBalance = async () => {
+  const performBalanceAction = async () => {
     if (!selectedBalance || !adjustmentAmount) return;
 
     const amount = parseFloat(adjustmentAmount);
-    if (isNaN(amount)) {
+    if (isNaN(amount) || amount <= 0) {
       toast({
         title: "Error",
-        description: "Please enter a valid amount",
+        description: "Please enter a valid positive amount",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const { error } = await supabase.rpc('update_user_balance', {
-        p_user_id: selectedBalance.user_id,
-        p_amount: amount,
-        p_transaction_type: 'manual',
-        p_description: adjustmentDescription || `Manual balance adjustment by admin`
-      });
+      let error;
+
+      switch (actionType) {
+        case 'adjust':
+          const { error: balanceError } = await supabase.rpc('update_user_balance', {
+            p_user_id: selectedBalance.user_id,
+            p_amount: amount,
+            p_transaction_type: 'manual',
+            p_description: adjustmentDescription || `Manual balance adjustment by admin`
+          });
+          error = balanceError;
+          break;
+
+        case 'freeze':
+          const { error: freezeError } = await supabase.rpc('update_frozen_balance', {
+            p_user_id: selectedBalance.user_id,
+            p_amount: amount,
+            p_action: 'freeze'
+          });
+          error = freezeError;
+          break;
+
+        case 'unfreeze':
+          const { error: unfreezeError } = await supabase.rpc('update_frozen_balance', {
+            p_user_id: selectedBalance.user_id,
+            p_amount: amount,
+            p_action: 'unfreeze'
+          });
+          error = unfreezeError;
+          break;
+
+        default:
+          throw new Error('Unsupported action type');
+      }
 
       if (error) throw error;
 
@@ -107,16 +154,25 @@ const UserBalance = () => {
       setSelectedBalance(null);
       setAdjustmentAmount('');
       setAdjustmentDescription('');
+      setActionType('adjust');
+
+      const actionLabels = {
+        adjust: 'adjusted',
+        freeze: 'frozen',
+        unfreeze: 'unfrozen',
+        hold: 'moved to hold',
+        release: 'released from hold'
+      };
 
       toast({
         title: "Success",
-        description: "User balance adjusted successfully",
+        description: `User balance ${actionLabels[actionType]} successfully`,
       });
     } catch (error) {
-      console.error('Error adjusting balance:', error);
+      console.error('Error performing balance action:', error);
       toast({
         title: "Error",
-        description: "Failed to adjust user balance",
+        description: `Failed to ${actionType} user balance`,
         variant: "destructive",
       });
     }
@@ -266,60 +322,117 @@ const UserBalance = () => {
                       {new Date(balance.updated_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <Dialog open={showAdjustmentDialog && selectedBalance?.id === balance.id} onOpenChange={(open) => {
-                        setShowAdjustmentDialog(open);
-                        if (!open) {
-                          setSelectedBalance(null);
-                          setAdjustmentAmount('');
-                          setAdjustmentDescription('');
-                        }
-                      }}>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedBalance(balance);
-                              setShowAdjustmentDialog(true);
-                            }}
-                          >
-                            Adjust
-                          </Button>
-                        </DialogTrigger>
+                      <div className="flex gap-1">
+                        <Dialog open={showAdjustmentDialog && selectedBalance?.id === balance.id} onOpenChange={(open) => {
+                          setShowAdjustmentDialog(open);
+                          if (!open) {
+                            setSelectedBalance(null);
+                            setAdjustmentAmount('');
+                            setAdjustmentDescription('');
+                            setActionType('adjust');
+                          }
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedBalance(balance);
+                                setActionType('adjust');
+                                setShowAdjustmentDialog(true);
+                              }}
+                            >
+                              <DollarSign className="h-3 w-3" />
+                            </Button>
+                          </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
-                            <DialogTitle>Adjust User Balance</DialogTitle>
+                            <DialogTitle>
+                              {actionType === 'adjust' && 'Adjust User Balance'}
+                              {actionType === 'freeze' && 'Freeze Balance'}
+                              {actionType === 'unfreeze' && 'Unfreeze Balance'}
+                            </DialogTitle>
                             <DialogDescription>
-                              Manually adjust balance for {getUserDisplayName(balance.user_id)}
+                              {actionType === 'adjust' && `Manually adjust balance for ${getUserDisplayName(balance.user_id)}`}
+                              {actionType === 'freeze' && `Move funds from available to frozen for ${getUserDisplayName(balance.user_id)}`}
+                              {actionType === 'unfreeze' && `Move funds from frozen to available for ${getUserDisplayName(balance.user_id)}`}
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div>
-                              <label className="text-sm font-medium">Current Balance</label>
-                              <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
+                            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                              <div>
+                                <label className="text-sm font-medium">Available</label>
+                                <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium">Frozen</label>
+                                <p className="text-lg font-bold">${balance.frozen.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium">On Hold</label>
+                                <p className="text-lg font-bold">${balance.on_hold.toFixed(2)}</p>
+                              </div>
                             </div>
+
+                            <div className="flex gap-2 mb-4">
+                              <Button 
+                                variant={actionType === 'adjust' ? 'default' : 'outline'} 
+                                size="sm"
+                                onClick={() => setActionType('adjust')}
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Adjust
+                              </Button>
+                              <Button 
+                                variant={actionType === 'freeze' ? 'default' : 'outline'} 
+                                size="sm"
+                                onClick={() => setActionType('freeze')}
+                              >
+                                <Lock className="h-4 w-4 mr-1" />
+                                Freeze
+                              </Button>
+                              <Button 
+                                variant={actionType === 'unfreeze' ? 'default' : 'outline'} 
+                                size="sm"
+                                onClick={() => setActionType('unfreeze')}
+                              >
+                                <Unlock className="h-4 w-4 mr-1" />
+                                Unfreeze
+                              </Button>
+                            </div>
+
                             <div>
-                              <label className="text-sm font-medium mb-2 block">Adjustment Amount</label>
+                              <label className="text-sm font-medium mb-2 block">Amount</label>
                               <Input
                                 type="number"
                                 step="0.01"
-                                placeholder="Enter amount (positive to add, negative to subtract)"
+                                placeholder={
+                                  actionType === 'adjust' 
+                                    ? "Enter amount (positive to add, negative to subtract)"
+                                    : "Enter positive amount"
+                                }
                                 value={adjustmentAmount}
                                 onChange={(e) => setAdjustmentAmount(e.target.value)}
                               />
                               <p className="text-xs text-muted-foreground mt-1">
-                                Use positive numbers to add funds, negative to subtract
+                                {actionType === 'adjust' && 'Use positive numbers to add funds, negative to subtract'}
+                                {actionType === 'freeze' && `Max available: $${balance.balance.toFixed(2)}`}
+                                {actionType === 'unfreeze' && `Max frozen: $${balance.frozen.toFixed(2)}`}
                               </p>
                             </div>
-                            <div>
-                              <label className="text-sm font-medium mb-2 block">Description</label>
-                              <Textarea
-                                placeholder="Reason for adjustment..."
-                                value={adjustmentDescription}
-                                onChange={(e) => setAdjustmentDescription(e.target.value)}
-                                rows={3}
-                              />
-                            </div>
+                            
+                            {actionType === 'adjust' && (
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">Description</label>
+                                <Textarea
+                                  placeholder="Reason for adjustment..."
+                                  value={adjustmentDescription}
+                                  onChange={(e) => setAdjustmentDescription(e.target.value)}
+                                  rows={3}
+                                />
+                              </div>
+                            )}
+
                             <div className="flex gap-2">
                               <Button 
                                 variant="outline" 
@@ -329,6 +442,7 @@ const UserBalance = () => {
                                   setSelectedBalance(null);
                                   setAdjustmentAmount('');
                                   setAdjustmentDescription('');
+                                  setActionType('adjust');
                                 }}
                               >
                                 Cancel
@@ -336,19 +450,23 @@ const UserBalance = () => {
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button className="flex-1" disabled={!adjustmentAmount}>
-                                    Apply Adjustment
+                                    {actionType === 'adjust' && 'Apply Adjustment'}
+                                    {actionType === 'freeze' && 'Freeze Amount'}
+                                    {actionType === 'unfreeze' && 'Unfreeze Amount'}
                                   </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Balance Adjustment</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Confirm {actionType === 'adjust' ? 'Balance Adjustment' : actionType === 'freeze' ? 'Freeze Balance' : 'Unfreeze Balance'}
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to adjust {getUserDisplayName(balance.user_id)}'s balance by ${adjustmentAmount}?
+                                      Are you sure you want to {actionType} ${adjustmentAmount} for {getUserDisplayName(balance.user_id)}?
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={adjustUserBalance}>
+                                    <AlertDialogAction onClick={performBalanceAction}>
                                       Confirm
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -357,7 +475,34 @@ const UserBalance = () => {
                             </div>
                           </div>
                         </DialogContent>
-                      </Dialog>
+                        </Dialog>
+                        
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBalance(balance);
+                            setActionType('freeze');
+                            setShowAdjustmentDialog(true);
+                          }}
+                          disabled={balance.balance <= 0}
+                        >
+                          <Lock className="h-3 w-3" />
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBalance(balance);
+                            setActionType('unfreeze');
+                            setShowAdjustmentDialog(true);
+                          }}
+                          disabled={balance.frozen <= 0}
+                        >
+                          <Unlock className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

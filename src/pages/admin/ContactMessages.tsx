@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Mail, Search, MessageSquare, Eye, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface ContactMessage {
   id: string;
@@ -24,18 +25,51 @@ const ContactMessages = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
+  const [assignedEmails, setAssignedEmails] = useState<string[]>([]);
   const { toast } = useToast();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
   useEffect(() => {
-    fetchContactMessages();
-  }, []);
+    if (!adminLoading) {
+      fetchAssignedEmails();
+      fetchContactMessages();
+    }
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
+
+  const fetchAssignedEmails = async () => {
+    if (isSuperAdmin || assignedUserIds.length === 0) {
+      setAssignedEmails([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .in('user_id', assignedUserIds)
+        .not('email', 'is', null);
+
+      if (error) throw error;
+      setAssignedEmails(data?.map(p => p.email).filter(Boolean) || []);
+    } catch (error) {
+      console.error('Error fetching assigned emails:', error);
+      setAssignedEmails([]);
+    }
+  };
 
   const fetchContactMessages = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('contact_messages')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Filter contact messages for regular admins to only show messages from assigned users
+      if (!isSuperAdmin && assignedEmails.length > 0) {
+        query = query.in('email', assignedEmails);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setMessages(data || []);

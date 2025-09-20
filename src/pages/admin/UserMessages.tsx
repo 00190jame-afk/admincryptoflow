@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { MessageSquare, Search, Send, Users, Eye, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface UserMessage {
   id: string;
@@ -34,18 +35,28 @@ const UserMessages = () => {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
   const { toast } = useToast();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
   useEffect(() => {
-    fetchMessages();
-    fetchProfiles();
-  }, []);
+    if (!adminLoading) {
+      fetchMessages();
+      fetchProfiles();
+    }
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
   const fetchMessages = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Filter messages for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setMessages(data || []);
@@ -61,9 +72,16 @@ const UserMessages = () => {
 
   const fetchProfiles = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
         .select('user_id, email, first_name, last_name');
+
+      // Filter profiles for regular admins to only show assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setProfiles(data || []);
