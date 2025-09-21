@@ -55,8 +55,13 @@ const WithdrawalRequests = () => {
         .order('created_at', { ascending: false });
 
       // Filter withdrawal requests for regular admins to only show assigned users
-      if (!isSuperAdmin && assignedUserIds.length > 0) {
-        query = query.in('user_id', assignedUserIds);
+      if (!isSuperAdmin) {
+        if (assignedUserIds.length > 0) {
+          query = query.in('user_id', assignedUserIds);
+        } else {
+          // Regular admin with no assigned users should see no data
+          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000');
+        }
       }
 
       const { data, error } = await query;
@@ -82,8 +87,13 @@ const WithdrawalRequests = () => {
         .select('user_id, email, first_name, last_name');
 
       // Filter profiles for regular admins to only show assigned users
-      if (!isSuperAdmin && assignedUserIds.length > 0) {
-        query = query.in('user_id', assignedUserIds);
+      if (!isSuperAdmin) {
+        if (assignedUserIds.length > 0) {
+          query = query.in('user_id', assignedUserIds);
+        } else {
+          // Regular admin with no assigned users should see no data
+          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000');
+        }
       }
 
       const { data, error } = await query;

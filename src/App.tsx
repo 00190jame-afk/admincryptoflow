@@ -12,7 +12,7 @@ import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
-import SecurityCenter from "./pages/admin/SecurityCenter";
+
 import Settings from "./pages/admin/Settings";
 import ContactMessages from "./pages/admin/ContactMessages";
 import UserMessages from "./pages/admin/UserMessages";
@@ -42,7 +42,7 @@ const App = () => (
               <Route path="recharge" element={<RechargeCodeManagement />} />
               <Route path="balance" element={<UserBalance />} />
               <Route path="withdrawals" element={<WithdrawalRequests />} />
-              <Route path="security" element={<SecurityCenter />} />
+              
               <Route path="settings" element={<Settings />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

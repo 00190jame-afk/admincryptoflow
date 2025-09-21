@@ -65,8 +65,13 @@ const ContactMessages = () => {
         .order('created_at', { ascending: false });
 
       // Filter contact messages for regular admins to only show messages from assigned users
-      if (!isSuperAdmin && assignedEmails.length > 0) {
-        query = query.in('email', assignedEmails);
+      if (!isSuperAdmin) {
+        if (assignedEmails.length > 0) {
+          query = query.in('email', assignedEmails);
+        } else {
+          // Regular admin with no assigned users should see no data
+          query = query.eq('email', 'no-email@nonexistent.com');
+        }
       }
 
       const { data, error } = await query;

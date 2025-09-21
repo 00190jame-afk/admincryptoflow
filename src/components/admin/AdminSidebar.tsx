@@ -41,7 +41,6 @@ const superAdminItems = [
 ];
 
 const reportItems = [
-  { title: 'Security Center', url: '/admin/security', icon: Shield },
   { title: 'Settings', url: '/admin/settings', icon: Settings },
 ];
 
