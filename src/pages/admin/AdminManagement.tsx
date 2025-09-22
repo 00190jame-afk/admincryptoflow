@@ -36,9 +36,10 @@ interface InviteCode {
 }
 
 const AdminManagement = () => {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const [admins, setAdmins] = useState<AdminProfile[]>([]);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
+  const [userInviteCodes, setUserInviteCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newInviteRole, setNewInviteRole] = useState('admin');
@@ -48,8 +49,10 @@ const AdminManagement = () => {
     if (isSuperAdmin) {
       fetchAdmins();
       fetchInviteCodes();
+    } else if (user) {
+      fetchUserInviteCodes();
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, user]);
 
   const fetchAdmins = async () => {
     try {
@@ -76,6 +79,23 @@ const AdminManagement = () => {
       setInviteCodes(data || []);
     } catch (error) {
       console.error('Error fetching invite codes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUserInviteCodes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_profiles')
+        .select('assigned_invite_codes')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setUserInviteCodes(data?.assigned_invite_codes || []);
+    } catch (error) {
+      console.error('Error fetching user invite codes:', error);
     } finally {
       setLoading(false);
     }
@@ -164,12 +184,66 @@ const AdminManagement = () => {
   if (!isSuperAdmin) {
     return (
       <div className="space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground">Access Denied</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">My Invite Codes</h1>
           <p className="text-muted-foreground">
-            This section is only available to Super Administrators.
+            Share these codes with users to register and link them to your admin account
           </p>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>User Invite Codes</span>
+            </CardTitle>
+            <CardDescription>
+              These codes link new users to your admin account when they register
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-4">Loading...</div>
+            ) : userInviteCodes.length > 0 ? (
+              <div className="space-y-3">
+                <Alert>
+                  <AlertDescription>
+                    Share these codes with users. When they register using one of these codes, they will be linked to your admin account and you'll be able to see their data in User Management, Messages, and Withdrawal Requests.
+                  </AlertDescription>
+                </Alert>
+                {userInviteCodes.map((code, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/30">
+                    <div className="space-y-1">
+                      <code className="text-sm font-mono bg-background px-2 py-1 rounded">
+                        {code}
+                      </code>
+                      <p className="text-xs text-muted-foreground">
+                        User registration invite code
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyToClipboard(code)}
+                    >
+                      {copiedCode === code ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No invite codes assigned</p>
+                <p className="text-sm">Contact a super admin to get user invite codes assigned to your account.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -12,7 +12,7 @@ import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
-
+import UserRegister from "./pages/UserRegister";
 import Settings from "./pages/admin/Settings";
 import ContactMessages from "./pages/admin/ContactMessages";
 import UserMessages from "./pages/admin/UserMessages";
@@ -32,6 +32,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<AdminAuth />} />
+            <Route path="/register" element={<UserRegister />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="users" element={<UserManagement />} />

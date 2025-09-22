@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -178,6 +178,17 @@ const AdminAuth = () => {
               </form>
             </TabsContent>
           </Tabs>
+          
+          <div className="mt-6 text-center">
+            <p className="text-sm text-muted-foreground mb-2">
+              Not an admin? Looking to register as a user?
+            </p>
+            <Link to="/register">
+              <Button variant="outline" size="sm">
+                User Registration
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
