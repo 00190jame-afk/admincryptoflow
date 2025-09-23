@@ -52,34 +52,34 @@ export type Database = {
       }
       admin_profiles: {
         Row: {
-          assigned_invite_codes: string[] | null
           created_at: string
           email: string
           full_name: string | null
           id: string
           is_active: boolean
+          primary_invite_code: string | null
           role: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          assigned_invite_codes?: string[] | null
           created_at?: string
           email: string
           full_name?: string | null
           id?: string
           is_active?: boolean
+          primary_invite_code?: string | null
           role?: string
           updated_at?: string
           user_id: string
         }
         Update: {
-          assigned_invite_codes?: string[] | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
           is_active?: boolean
+          primary_invite_code?: string | null
           role?: string
           updated_at?: string
           user_id?: string
@@ -208,6 +208,7 @@ export type Database = {
       }
       invite_codes: {
         Row: {
+          admin_name: string | null
           code: string
           created_at: string | null
           created_by: string | null
@@ -220,6 +221,7 @@ export type Database = {
           used_by: string | null
         }
         Insert: {
+          admin_name?: string | null
           code: string
           created_at?: string | null
           created_by?: string | null
@@ -232,6 +234,7 @@ export type Database = {
           used_by?: string | null
         }
         Update: {
+          admin_name?: string | null
           code?: string
           created_at?: string | null
           created_by?: string | null

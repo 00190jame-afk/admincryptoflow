@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -17,14 +16,26 @@ interface AdminProfile {
   id: string;
   user_id: string;
   email: string;
-  full_name: string;
+  full_name: string | null;
   role: string;
   is_active: boolean;
   created_at: string;
-  assigned_invite_codes: string[];
+  primary_invite_code: string | null;
 }
 
 interface InviteCode {
+  id: string;
+  code: string;
+  current_uses: number;
+  max_uses: number;
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  admin_name: string | null;
+}
+
+interface AdminInviteCode {
   id: string;
   code: string;
   role: string;
@@ -39,7 +50,7 @@ const AdminManagement = () => {
   const { isSuperAdmin, user } = useAuth();
   const [admins, setAdmins] = useState<AdminProfile[]>([]);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
-  const [userInviteCodes, setUserInviteCodes] = useState<string[]>([]);
+  const [adminInviteCodes, setAdminInviteCodes] = useState<AdminInviteCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newInviteRole, setNewInviteRole] = useState('admin');
@@ -49,8 +60,9 @@ const AdminManagement = () => {
     if (isSuperAdmin) {
       fetchAdmins();
       fetchInviteCodes();
+      fetchAdminInviteCodes();
     } else if (user) {
-      fetchUserInviteCodes();
+      fetchInviteCodes();
     }
   }, [isSuperAdmin, user]);
 
@@ -65,13 +77,18 @@ const AdminManagement = () => {
       setAdmins(data || []);
     } catch (error) {
       console.error('Error fetching admins:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch admin profiles",
+        variant: "destructive",
+      });
     }
   };
 
   const fetchInviteCodes = async () => {
     try {
       const { data, error } = await supabase
-        .from('admin_invite_codes')
+        .from('invite_codes')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -79,29 +96,31 @@ const AdminManagement = () => {
       setInviteCodes(data || []);
     } catch (error) {
       console.error('Error fetching invite codes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch invite codes",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUserInviteCodes = async () => {
+  const fetchAdminInviteCodes = async () => {
     try {
       const { data, error } = await supabase
-        .from('admin_profiles')
-        .select('assigned_invite_codes')
-        .eq('user_id', user?.id)
-        .single();
+        .from('admin_invite_codes')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUserInviteCodes(data?.assigned_invite_codes || []);
+      setAdminInviteCodes(data || []);
     } catch (error) {
-      console.error('Error fetching user invite codes:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching admin invite codes:', error);
     }
   };
 
-  const createInviteCode = async () => {
+  const createAdminInviteCode = async () => {
     setCreating(true);
     try {
       // Generate a random 8-character code
@@ -126,20 +145,60 @@ const AdminManagement = () => {
       if (error) throw error;
 
       toast({
-        title: "Invite code created",
+        title: "Admin invite code created",
         description: "New admin invite code has been generated successfully.",
       });
 
-      fetchInviteCodes();
+      fetchAdminInviteCodes();
     } catch (error) {
-      console.error('Error creating invite code:', error);
+      console.error('Error creating admin invite code:', error);
       toast({
         title: "Error",
-        description: "Failed to create invite code. Please try again.",
+        description: "Failed to create admin invite code. Please try again.",
         variant: "destructive",
       });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const createUserInviteCode = async (adminName: string) => {
+    if (!user) return;
+    
+    try {
+      // Use the generate_invite_code function to create a unique code
+      const { data: codeResult, error: codeError } = await supabase
+        .rpc('generate_invite_code');
+
+      if (codeError) throw codeError;
+      
+      // Create the invite code
+      const { error } = await supabase
+        .from('invite_codes')
+        .insert({
+          code: codeResult,
+          created_by: user.id,
+          max_uses: 100,
+          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
+          admin_name: adminName
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `User invite code ${codeResult} created successfully!`,
+      });
+
+      // Refresh data
+      await fetchInviteCodes();
+    } catch (error) {
+      console.error('Error creating user invite code:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create user invite code",
+        variant: "destructive",
+      });
     }
   };
 
@@ -182,12 +241,14 @@ const AdminManagement = () => {
   };
 
   if (!isSuperAdmin) {
+    const myCode = inviteCodes.find(code => code.created_by === user?.id);
+    
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Invite Codes</h1>
+          <h1 className="text-3xl font-bold text-foreground">My Invite Code</h1>
           <p className="text-muted-foreground">
-            Share these codes with users to register and link them to your admin account
+            Your personal invite code for user registration
           </p>
         </div>
 
@@ -195,51 +256,53 @@ const AdminManagement = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="h-5 w-5" />
-              <span>User Invite Codes</span>
+              <span>User Registration Code</span>
             </CardTitle>
             <CardDescription>
-              These codes link new users to your admin account when they register
+              Share this code with users to allow them to register under your administration
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="text-center py-4">Loading...</div>
-            ) : userInviteCodes.length > 0 ? (
+            ) : myCode ? (
               <div className="space-y-3">
                 <Alert>
                   <AlertDescription>
-                    Share these codes with users. When they register using one of these codes, they will be linked to your admin account and you'll be able to see their data in User Management, Messages, and Withdrawal Requests.
+                    Share this code with users. When they register using this code, they will be linked to your admin account and you'll be able to see their data in User Management, Messages, and Withdrawal Requests.
                   </AlertDescription>
                 </Alert>
-                {userInviteCodes.map((code, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/30">
-                    <div className="space-y-1">
-                      <code className="text-sm font-mono bg-background px-2 py-1 rounded">
-                        {code}
-                      </code>
-                      <p className="text-xs text-muted-foreground">
-                        User registration invite code
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(code)}
-                    >
-                      {copiedCode === code ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
+                  <div className="space-y-1">
+                    <code className="text-lg font-mono bg-background px-3 py-2 rounded">
+                      {myCode.code}
+                    </code>
+                    <p className="text-sm text-muted-foreground">
+                      Used {myCode.current_uses}/{myCode.max_uses} times
+                      {myCode.expires_at && (
+                        <>
+                          {' • '}Expires {new Date(myCode.expires_at).toLocaleDateString()}
+                        </>
                       )}
-                    </Button>
+                    </p>
                   </div>
-                ))}
+                  <Button
+                    variant="outline"
+                    onClick={() => copyToClipboard(myCode.code)}
+                  >
+                    {copiedCode === myCode.code ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No invite codes assigned</p>
-                <p className="text-sm">Contact a super admin to get user invite codes assigned to your account.</p>
+                <p className="text-lg font-medium">No invite code assigned</p>
+                <p className="text-sm">Contact a super admin to get an invite code assigned to your account.</p>
               </div>
             )}
           </CardContent>
@@ -253,47 +316,53 @@ const AdminManagement = () => {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Admin Management</h1>
         <p className="text-muted-foreground">
-          Manage administrators and create invite codes
+          Manage administrators and their invite codes
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Shield className="h-5 w-5" />
-              <span>Administrators</span>
-            </CardTitle>
-            <CardDescription>
-              All registered administrators and their status
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
+      {/* Admin Profiles with User Invite Codes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Shield className="h-5 w-5" />
+            <span>Administrator Profiles</span>
+          </CardTitle>
+          <CardDescription>
+            All registered administrators and their user invite codes
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>User Invite Code</TableHead>
+                <TableHead>Code Usage</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
                 <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableCell colSpan={7} className="text-center">
+                    Loading...
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center">
-                      Loading...
-                    </TableCell>
-                  </TableRow>
-                ) : admins.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center">
-                      No administrators found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  admins.map((admin) => (
+              ) : admins.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center">
+                    No administrators found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                admins.map((admin) => {
+                  const adminCode = inviteCodes.find(code => code.created_by === admin.user_id);
+                  return (
                     <TableRow key={admin.id}>
+                      <TableCell className="font-medium">{admin.full_name || admin.email}</TableCell>
                       <TableCell>{admin.email}</TableCell>
                       <TableCell>
                         <Badge variant={admin.role === 'super_admin' ? 'default' : 'secondary'}>
@@ -301,9 +370,39 @@ const AdminManagement = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={admin.is_active ? 'default' : 'secondary'}>
+                        <Badge variant={admin.is_active ? 'default' : 'destructive'}>
                           {admin.is_active ? 'Active' : 'Inactive'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {adminCode ? (
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-muted px-2 py-1 rounded">{adminCode.code}</code>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => copyToClipboard(adminCode.code)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => createUserInviteCode(admin.full_name || admin.email)}
+                          >
+                            Create Code
+                          </Button>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {adminCode ? (
+                          <span className="text-sm text-muted-foreground">
+                            {adminCode.current_uses}/{adminCode.max_uses} used
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No code</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {admin.role !== 'super_admin' && (
@@ -317,103 +416,104 @@ const AdminManagement = () => {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5" />
-                <span>Invite Codes</span>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Code
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Admin Invite Code</DialogTitle>
-                    <DialogDescription>
-                      Generate a new invite code for administrator registration
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Admin Role</Label>
-                      <Select value={newInviteRole} onValueChange={setNewInviteRole}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="super_admin">Super Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Alert>
-                      <AlertDescription>
-                        Invite codes expire after 7 days and can only be used once.
-                      </AlertDescription>
-                    </Alert>
-                    <Button onClick={createInviteCode} disabled={creating} className="w-full">
-                      {creating ? 'Creating...' : 'Create Invite Code'}
-                    </Button>
+      {/* Admin Invite Codes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Admin Invite Codes</span>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Admin Code
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Admin Invite Code</DialogTitle>
+                  <DialogDescription>
+                    Generate a new invite code for administrator registration
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Admin Role</Label>
+                    <Select value={newInviteRole} onValueChange={setNewInviteRole}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="super_admin">Super Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </DialogContent>
-              </Dialog>
-            </CardTitle>
-            <CardDescription>
-              Generate and manage admin invite codes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {inviteCodes.slice(0, 5).map((code) => (
-                <div key={code.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                        {code.code}
-                      </code>
-                      <Badge variant={code.role === 'super_admin' ? 'default' : 'secondary'}>
-                        {code.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {code.used_by ? 'Used' : 'Available'} • Expires {new Date(code.expires_at || '').toLocaleDateString()}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(code.code)}
-                    disabled={!!code.used_by}
-                  >
-                    {copiedCode === code.code ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
+                  <Alert>
+                    <AlertDescription>
+                      Admin invite codes expire after 7 days and can only be used once.
+                    </AlertDescription>
+                  </Alert>
+                  <Button onClick={createAdminInviteCode} disabled={creating} className="w-full">
+                    {creating ? 'Creating...' : 'Create Admin Invite Code'}
                   </Button>
                 </div>
-              ))}
-              {inviteCodes.length === 0 && !loading && (
-                <p className="text-center text-sm text-muted-foreground py-4">
-                  No invite codes created yet
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </DialogContent>
+            </Dialog>
+          </CardTitle>
+          <CardDescription>
+            Codes for creating new admin accounts (different from user registration codes)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {adminInviteCodes.slice(0, 5).map((code) => (
+              <div key={code.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                      {code.code}
+                    </code>
+                    <Badge variant={code.role === 'super_admin' ? 'default' : 'secondary'}>
+                      {code.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {code.used_by ? 'Used' : 'Available'} • Expires {new Date(code.expires_at || '').toLocaleDateString()}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(code.code)}
+                  disabled={!!code.used_by}
+                >
+                  {copiedCode === code.code ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            ))}
+            {adminInviteCodes.length === 0 && !loading && (
+              <p className="text-center text-sm text-muted-foreground py-4">
+                No admin invite codes created yet
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
