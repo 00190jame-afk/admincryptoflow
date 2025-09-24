@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Wallet, Plus, Minus, Search, DollarSign, Lock, Unlock, Clock } from 'lucide-react';
+import { Wallet, Search, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
 
@@ -36,10 +36,11 @@ const UserBalance = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBalance, setSelectedBalance] = useState<UserBalance | null>(null);
-  const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [balanceInput, setBalanceInput] = useState('');
+  const [frozenInput, setFrozenInput] = useState('');
+  const [onHoldInput, setOnHoldInput] = useState('');
   const [adjustmentDescription, setAdjustmentDescription] = useState('');
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
-  const [actionType, setActionType] = useState<'adjust' | 'freeze' | 'unfreeze' | 'hold' | 'release'>('adjust');
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
@@ -99,80 +100,53 @@ const UserBalance = () => {
   };
 
   const performBalanceAction = async () => {
-    if (!selectedBalance || !adjustmentAmount) return;
+    if (!selectedBalance) return;
 
-    const amount = parseFloat(adjustmentAmount);
-    if (isNaN(amount) || amount <= 0) {
+    // Get the new values from the form
+    const newBalance = balanceInput === '' ? null : parseFloat(balanceInput);
+    const newFrozen = frozenInput === '' ? null : parseFloat(frozenInput);
+    const newOnHold = onHoldInput === '' ? null : parseFloat(onHoldInput);
+
+    // Validate inputs
+    if ((newBalance !== null && (isNaN(newBalance) || newBalance < 0)) ||
+        (newFrozen !== null && (isNaN(newFrozen) || newFrozen < 0)) ||
+        (newOnHold !== null && (isNaN(newOnHold) || newOnHold < 0))) {
       toast({
         title: "Error",
-        description: "Please enter a valid positive amount",
+        description: "Please enter valid non-negative amounts",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      let error;
-
-      switch (actionType) {
-        case 'adjust':
-          const { error: balanceError } = await supabase.rpc('update_user_balance', {
-            p_user_id: selectedBalance.user_id,
-            p_amount: amount,
-            p_transaction_type: 'manual',
-            p_description: adjustmentDescription || `Manual balance adjustment by admin`
-          });
-          error = balanceError;
-          break;
-
-        case 'freeze':
-          const { error: freezeError } = await supabase.rpc('update_frozen_balance', {
-            p_user_id: selectedBalance.user_id,
-            p_amount: amount,
-            p_action: 'freeze'
-          });
-          error = freezeError;
-          break;
-
-        case 'unfreeze':
-          const { error: unfreezeError } = await supabase.rpc('update_frozen_balance', {
-            p_user_id: selectedBalance.user_id,
-            p_amount: amount,
-            p_action: 'unfreeze'
-          });
-          error = unfreezeError;
-          break;
-
-        default:
-          throw new Error('Unsupported action type');
-      }
+      const { error } = await supabase.rpc('admin_update_user_balance', {
+        p_user_id: selectedBalance.user_id,
+        p_balance: newBalance,
+        p_frozen: newFrozen,
+        p_on_hold: newOnHold,
+        p_description: adjustmentDescription || `Admin balance update`
+      });
 
       if (error) throw error;
 
       fetchUserBalances();
       setShowAdjustmentDialog(false);
       setSelectedBalance(null);
-      setAdjustmentAmount('');
+      setBalanceInput('');
+      setFrozenInput('');
+      setOnHoldInput('');
       setAdjustmentDescription('');
-      setActionType('adjust');
-
-      const actionLabels = {
-        adjust: 'adjusted',
-        freeze: 'frozen',
-        unfreeze: 'unfrozen',
-        hold: 'moved to hold',
-        release: 'released from hold'
-      };
 
       toast({
         title: "Success",
-        description: `User balance ${actionLabels[actionType]} successfully`,
+        description: "User balance updated successfully",
       });
     } catch (error) {
       console.error('Error performing balance action:', error);
       toast({
         title: "Error",
-        description: `Failed to ${actionType} user balance`,
+        description: "Failed to update user balance",
         variant: "destructive",
       });
     }
@@ -210,7 +184,7 @@ const UserBalance = () => {
       <div>
         <h1 className="text-3xl font-bold text-foreground">User Balance Management</h1>
         <p className="text-muted-foreground">
-          Monitor and manage user account balances
+          Monitor and manage user account balances. Simply set the amounts you want in each field.
         </p>
       </div>
 
@@ -236,7 +210,7 @@ const UserBalance = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Frozen</CardTitle>
-            <Minus className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalFrozen.toFixed(2)}</div>
@@ -245,7 +219,7 @@ const UserBalance = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total On Hold</CardTitle>
-            <Plus className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalOnHold.toFixed(2)}</div>
@@ -322,152 +296,110 @@ const UserBalance = () => {
                       {new Date(balance.updated_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Dialog open={showAdjustmentDialog && selectedBalance?.id === balance.id} onOpenChange={(open) => {
-                          setShowAdjustmentDialog(open);
-                          if (!open) {
-                            setSelectedBalance(null);
-                            setAdjustmentAmount('');
-                            setAdjustmentDescription('');
-                            setActionType('adjust');
-                          }
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedBalance(balance);
-                                setActionType('adjust');
-                                setShowAdjustmentDialog(true);
-                              }}
-                            >
-                              <DollarSign className="h-3 w-3" />
-                            </Button>
-                          </DialogTrigger>
+                      <Dialog open={showAdjustmentDialog && selectedBalance?.id === balance.id} onOpenChange={(open) => {
+                        setShowAdjustmentDialog(open);
+                        if (!open) {
+                          setSelectedBalance(null);
+                          setBalanceInput('');
+                          setFrozenInput('');
+                          setOnHoldInput('');
+                          setAdjustmentDescription('');
+                        } else if (balance) {
+                          // Pre-fill with current values when opening
+                          setBalanceInput(balance.balance.toString());
+                          setFrozenInput(balance.frozen.toString());
+                          setOnHoldInput(balance.on_hold.toString());
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedBalance(balance);
+                              setShowAdjustmentDialog(true);
+                            }}
+                          >
+                            <DollarSign className="h-3 w-3" />
+                          </Button>
+                        </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
-                            <DialogTitle>
-                              {actionType === 'adjust' && 'Adjust User Balance'}
-                              {actionType === 'freeze' && 'Freeze Balance'}
-                              {actionType === 'unfreeze' && 'Unfreeze Balance'}
-                            </DialogTitle>
+                            <DialogTitle>Manage User Balance</DialogTitle>
                             <DialogDescription>
-                              {actionType === 'adjust' && `Manually adjust balance for ${getUserDisplayName(balance.user_id)}`}
-                              {actionType === 'freeze' && `Move funds from available to frozen for ${getUserDisplayName(balance.user_id)}`}
-                              {actionType === 'unfreeze' && `Move funds from frozen to available for ${getUserDisplayName(balance.user_id)}`}
+                              Update balance fields for {getUserDisplayName(balance.user_id)}. Simply set the amounts you want in each field.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                            <div className="grid grid-cols-3 gap-4">
                               <div>
-                                <label className="text-sm font-medium">Available</label>
-                                <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Frozen</label>
-                                <p className="text-lg font-bold">${balance.frozen.toFixed(2)}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">On Hold</label>
-                                <p className="text-lg font-bold">${balance.on_hold.toFixed(2)}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2 mb-4">
-                              <Button 
-                                variant={actionType === 'adjust' ? 'default' : 'outline'} 
-                                size="sm"
-                                onClick={() => setActionType('adjust')}
-                              >
-                                <DollarSign className="h-4 w-4 mr-1" />
-                                Adjust
-                              </Button>
-                              <Button 
-                                variant={actionType === 'freeze' ? 'default' : 'outline'} 
-                                size="sm"
-                                onClick={() => setActionType('freeze')}
-                              >
-                                <Lock className="h-4 w-4 mr-1" />
-                                Freeze
-                              </Button>
-                              <Button 
-                                variant={actionType === 'unfreeze' ? 'default' : 'outline'} 
-                                size="sm"
-                                onClick={() => setActionType('unfreeze')}
-                              >
-                                <Unlock className="h-4 w-4 mr-1" />
-                                Unfreeze
-                              </Button>
-                            </div>
-
-                            <div>
-                              <label className="text-sm font-medium mb-2 block">Amount</label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder={
-                                  actionType === 'adjust' 
-                                    ? "Enter amount (positive to add, negative to subtract)"
-                                    : "Enter positive amount"
-                                }
-                                value={adjustmentAmount}
-                                onChange={(e) => setAdjustmentAmount(e.target.value)}
-                              />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {actionType === 'adjust' && 'Use positive numbers to add funds, negative to subtract'}
-                                {actionType === 'freeze' && `Max available: $${balance.balance.toFixed(2)}`}
-                                {actionType === 'unfreeze' && `Max frozen: $${balance.frozen.toFixed(2)}`}
-                              </p>
-                            </div>
-                            
-                            {actionType === 'adjust' && (
-                              <div>
-                                <label className="text-sm font-medium mb-2 block">Description</label>
-                                <Textarea
-                                  placeholder="Reason for adjustment..."
-                                  value={adjustmentDescription}
-                                  onChange={(e) => setAdjustmentDescription(e.target.value)}
-                                  rows={3}
+                                <label className="text-sm font-medium mb-2 block">Available Balance</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={balanceInput}
+                                  onChange={(e) => setBalanceInput(e.target.value)}
                                 />
                               </div>
-                            )}
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">Frozen</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={frozenInput}
+                                  onChange={(e) => setFrozenInput(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">On Hold</label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={onHoldInput}
+                                  onChange={(e) => setOnHoldInput(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="text-sm font-medium mb-2 block">Description</label>
+                              <Textarea
+                                placeholder="Reason for balance update..."
+                                value={adjustmentDescription}
+                                onChange={(e) => setAdjustmentDescription(e.target.value)}
+                                rows={3}
+                              />
+                            </div>
 
-                            <div className="flex gap-2">
+                            <div className="flex justify-end gap-2">
                               <Button 
                                 variant="outline" 
-                                className="flex-1"
-                                onClick={() => {
-                                  setShowAdjustmentDialog(false);
-                                  setSelectedBalance(null);
-                                  setAdjustmentAmount('');
-                                  setAdjustmentDescription('');
-                                  setActionType('adjust');
-                                }}
+                                onClick={() => setShowAdjustmentDialog(false)}
                               >
                                 Cancel
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button className="flex-1" disabled={!adjustmentAmount}>
-                                    {actionType === 'adjust' && 'Apply Adjustment'}
-                                    {actionType === 'freeze' && 'Freeze Amount'}
-                                    {actionType === 'unfreeze' && 'Unfreeze Amount'}
-                                  </Button>
+                                  <Button>Update Balance</Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Confirm {actionType === 'adjust' ? 'Balance Adjustment' : actionType === 'freeze' ? 'Freeze Balance' : 'Unfreeze Balance'}
-                                    </AlertDialogTitle>
+                                    <AlertDialogTitle>Confirm Balance Update</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to {actionType} ${adjustmentAmount} for {getUserDisplayName(balance.user_id)}?
+                                      Are you sure you want to update the balance for {getUserDisplayName(balance.user_id)}?
+                                      This action will be recorded in the audit log.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction onClick={performBalanceAction}>
-                                      Confirm
+                                      Confirm Update
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -475,34 +407,7 @@ const UserBalance = () => {
                             </div>
                           </div>
                         </DialogContent>
-                        </Dialog>
-                        
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedBalance(balance);
-                            setActionType('freeze');
-                            setShowAdjustmentDialog(true);
-                          }}
-                          disabled={balance.balance <= 0}
-                        >
-                          <Lock className="h-3 w-3" />
-                        </Button>
-                        
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedBalance(balance);
-                            setActionType('unfreeze');
-                            setShowAdjustmentDialog(true);
-                          }}
-                          disabled={balance.frozen <= 0}
-                        >
-                          <Unlock className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      </Dialog>
                     </TableCell>
                   </TableRow>
                 ))

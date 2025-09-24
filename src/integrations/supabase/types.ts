@@ -701,6 +701,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_update_user_balance: {
+        Args: {
+          p_balance?: number
+          p_description?: string
+          p_frozen?: number
+          p_on_hold?: number
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       create_verification_code: {
         Args: { p_identifier: string; p_type: string }
         Returns: string
