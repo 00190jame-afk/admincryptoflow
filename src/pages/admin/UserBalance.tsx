@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Wallet, Search, DollarSign } from 'lucide-react';
+import { Wallet, Plus, Minus, Search, DollarSign, Lock, Unlock, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
 
@@ -36,11 +36,13 @@ const UserBalance = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBalance, setSelectedBalance] = useState<UserBalance | null>(null);
-  const [balanceInput, setBalanceInput] = useState('');
-  const [frozenInput, setFrozenInput] = useState('');
-  const [onHoldInput, setOnHoldInput] = useState('');
   const [adjustmentDescription, setAdjustmentDescription] = useState('');
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
+  const [balanceInputs, setBalanceInputs] = useState({
+    balance: '',
+    frozen: '',
+    onHold: ''
+  });
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
@@ -102,18 +104,16 @@ const UserBalance = () => {
   const performBalanceAction = async () => {
     if (!selectedBalance) return;
 
-    // Get the new values from the form
-    const newBalance = balanceInput === '' ? null : parseFloat(balanceInput);
-    const newFrozen = frozenInput === '' ? null : parseFloat(frozenInput);
-    const newOnHold = onHoldInput === '' ? null : parseFloat(onHoldInput);
+    // Get the values from the input fields
+    const newBalance = parseFloat(balanceInputs.balance) || 0;
+    const newFrozen = parseFloat(balanceInputs.frozen) || 0;
+    const newOnHold = parseFloat(balanceInputs.onHold) || 0;
 
     // Validate inputs
-    if ((newBalance !== null && (isNaN(newBalance) || newBalance < 0)) ||
-        (newFrozen !== null && (isNaN(newFrozen) || newFrozen < 0)) ||
-        (newOnHold !== null && (isNaN(newOnHold) || newOnHold < 0))) {
+    if (newBalance < 0 || newFrozen < 0 || newOnHold < 0) {
       toast({
-        title: "Error",
-        description: "Please enter valid non-negative amounts",
+        title: "Error", 
+        description: "All amounts must be positive",
         variant: "destructive",
       });
       return;
@@ -125,7 +125,7 @@ const UserBalance = () => {
         p_balance: newBalance,
         p_frozen: newFrozen,
         p_on_hold: newOnHold,
-        p_description: adjustmentDescription || `Admin balance update`
+        p_description: adjustmentDescription || 'Admin balance update'
       });
 
       if (error) throw error;
@@ -133,9 +133,7 @@ const UserBalance = () => {
       fetchUserBalances();
       setShowAdjustmentDialog(false);
       setSelectedBalance(null);
-      setBalanceInput('');
-      setFrozenInput('');
-      setOnHoldInput('');
+      setBalanceInputs({ balance: '', frozen: '', onHold: '' });
       setAdjustmentDescription('');
 
       toast({
@@ -146,7 +144,7 @@ const UserBalance = () => {
       console.error('Error performing balance action:', error);
       toast({
         title: "Error",
-        description: "Failed to update user balance",
+        description: `Failed to update user balance`,
         variant: "destructive",
       });
     }
@@ -184,7 +182,7 @@ const UserBalance = () => {
       <div>
         <h1 className="text-3xl font-bold text-foreground">User Balance Management</h1>
         <p className="text-muted-foreground">
-          Monitor and manage user account balances. Simply set the amounts you want in each field.
+          Monitor and manage user account balances - Set balances directly in each field
         </p>
       </div>
 
@@ -210,7 +208,7 @@ const UserBalance = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Frozen</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Lock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalFrozen.toFixed(2)}</div>
@@ -219,7 +217,7 @@ const UserBalance = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total On Hold</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalOnHold.toFixed(2)}</div>
@@ -231,7 +229,7 @@ const UserBalance = () => {
         <CardHeader>
           <CardTitle>User Balances</CardTitle>
           <CardDescription>
-            View and manage all user account balances
+            View and manage all user account balances - Click the dollar icon to edit balances directly
           </CardDescription>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -300,15 +298,8 @@ const UserBalance = () => {
                         setShowAdjustmentDialog(open);
                         if (!open) {
                           setSelectedBalance(null);
-                          setBalanceInput('');
-                          setFrozenInput('');
-                          setOnHoldInput('');
+                          setBalanceInputs({ balance: '', frozen: '', onHold: '' });
                           setAdjustmentDescription('');
-                        } else if (balance) {
-                          // Pre-fill with current values when opening
-                          setBalanceInput(balance.balance.toString());
-                          setFrozenInput(balance.frozen.toString());
-                          setOnHoldInput(balance.on_hold.toString());
                         }
                       }}>
                         <DialogTrigger asChild>
@@ -317,6 +308,11 @@ const UserBalance = () => {
                             size="sm"
                             onClick={() => {
                               setSelectedBalance(balance);
+                              setBalanceInputs({
+                                balance: balance.balance.toString(),
+                                frozen: balance.frozen.toString(),
+                                onHold: balance.on_hold.toString()
+                              });
                               setShowAdjustmentDialog(true);
                             }}
                           >
@@ -327,10 +323,25 @@ const UserBalance = () => {
                           <DialogHeader>
                             <DialogTitle>Manage User Balance</DialogTitle>
                             <DialogDescription>
-                              Update balance fields for {getUserDisplayName(balance.user_id)}. Simply set the amounts you want in each field.
+                              Update balance fields directly for {getUserDisplayName(balance.user_id)}
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                              <div>
+                                <label className="text-sm font-medium">Current Available</label>
+                                <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium">Current Frozen</label>
+                                <p className="text-lg font-bold">${balance.frozen.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium">Current On Hold</label>
+                                <p className="text-lg font-bold">${balance.on_hold.toFixed(2)}</p>
+                              </div>
+                            </div>
+
                             <div className="grid grid-cols-3 gap-4">
                               <div>
                                 <label className="text-sm font-medium mb-2 block">Available Balance</label>
@@ -339,31 +350,34 @@ const UserBalance = () => {
                                   step="0.01"
                                   min="0"
                                   placeholder="0.00"
-                                  value={balanceInput}
-                                  onChange={(e) => setBalanceInput(e.target.value)}
+                                  value={balanceInputs.balance}
+                                  onChange={(e) => setBalanceInputs(prev => ({ ...prev, balance: e.target.value }))}
                                 />
+                                <p className="text-xs text-muted-foreground mt-1">Set to 0 to move all to other fields</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium mb-2 block">Frozen</label>
+                                <label className="text-sm font-medium mb-2 block">Frozen Balance</label>
                                 <Input
                                   type="number"
                                   step="0.01"
                                   min="0"
                                   placeholder="0.00"
-                                  value={frozenInput}
-                                  onChange={(e) => setFrozenInput(e.target.value)}
+                                  value={balanceInputs.frozen}
+                                  onChange={(e) => setBalanceInputs(prev => ({ ...prev, frozen: e.target.value }))}
                                 />
+                                <p className="text-xs text-muted-foreground mt-1">Frozen funds (restricted)</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium mb-2 block">On Hold</label>
+                                <label className="text-sm font-medium mb-2 block">On Hold Balance</label>
                                 <Input
                                   type="number"
                                   step="0.01"
                                   min="0"
                                   placeholder="0.00"
-                                  value={onHoldInput}
-                                  onChange={(e) => setOnHoldInput(e.target.value)}
+                                  value={balanceInputs.onHold}
+                                  onChange={(e) => setBalanceInputs(prev => ({ ...prev, onHold: e.target.value }))}
                                 />
+                                <p className="text-xs text-muted-foreground mt-1">Temporarily held funds</p>
                               </div>
                             </div>
                             
@@ -378,22 +392,22 @@ const UserBalance = () => {
                             </div>
 
                             <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="outline" 
-                                onClick={() => setShowAdjustmentDialog(false)}
-                              >
-                                Cancel
-                              </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button>Update Balance</Button>
+                                  <Button>
+                                    Update Balance
+                                  </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Balance Update</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to update the balance for {getUserDisplayName(balance.user_id)}?
-                                      This action will be recorded in the audit log.
+                                      Are you sure you want to update {getUserDisplayName(balance.user_id)}'s balance? This action will be logged for audit purposes.
+                                      <br /><br />
+                                      New values:
+                                      <br />• Available: ${parseFloat(balanceInputs.balance || '0').toFixed(2)}
+                                      <br />• Frozen: ${parseFloat(balanceInputs.frozen || '0').toFixed(2)}
+                                      <br />• On Hold: ${parseFloat(balanceInputs.onHold || '0').toFixed(2)}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
