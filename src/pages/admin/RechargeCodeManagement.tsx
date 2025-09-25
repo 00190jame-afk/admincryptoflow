@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CreditCard, Search, Plus, DollarSign, Users, Copy } from 'lucide-react';
+import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface RechargeCode {
   id: string;
@@ -34,12 +35,63 @@ const RechargeCodeManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [newCodeAmount, setNewCodeAmount] = useState('');
   const [showNewCodeDialog, setShowNewCodeDialog] = useState(false);
+  const [newCodeIds, setNewCodeIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+  const { markAsRead } = useNotifications();
 
   useEffect(() => {
     fetchRechargeCodes();
     fetchProfiles();
-  }, []);
+    
+    // Mark codes as read when component loads - no specific notification type for recharge codes
+    
+    // Set up real-time subscription for new codes
+    const codesChannel = supabase
+      .channel('recharge-codes-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload) => {
+          console.log('New recharge code created:', payload.new);
+          setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
+          // Mark this code as new for highlighting
+          setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
+          // Auto-remove the highlight after 30 seconds
+          setTimeout(() => {
+            setNewCodeIds((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(payload.new.id);
+              return newSet;
+            });
+          }, 30000);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload) => {
+          console.log('Recharge code updated:', payload.new);
+          setCodes((prevCodes) => 
+            prevCodes.map((code) => 
+              code.id === payload.new.id ? payload.new as RechargeCode : code
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(codesChannel);
+    };
+  }, [markAsRead]);
 
   const fetchRechargeCodes = async () => {
     try {
@@ -270,12 +322,21 @@ const RechargeCodeManagement = () => {
                 </TableRow>
               ) : (
                 filteredCodes.map((code) => (
-                  <TableRow key={code.id}>
+                  <TableRow 
+                    key={code.id}
+                    className={newCodeIds.has(code.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
                           {code.code}
                         </code>
+                        {newCodeIds.has(code.id) && (
+                          <Badge variant="destructive" className="text-xs animate-bounce">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            NEW
+                          </Badge>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

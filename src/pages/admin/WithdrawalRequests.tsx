@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Clock, CheckCircle, XCircle, CreditCard, AlertTriangle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, CreditCard, AlertTriangle, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface WithdrawRequest {
   id: string;
@@ -37,15 +38,67 @@ const WithdrawalRequests = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawRequest | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
+  const [newRequestIds, setNewRequestIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
+  const { markAsRead } = useNotifications();
 
   useEffect(() => {
     if (!adminLoading) {
       fetchWithdrawRequests();
       fetchProfiles();
+      
+      // Mark withdrawal requests as read when component loads
+      markAsRead('withdrawals');
+      
+      // Set up real-time subscription for new withdrawal requests
+      const requestsChannel = supabase
+        .channel('withdraw-requests-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'withdraw_requests'
+          },
+          (payload) => {
+            console.log('New withdrawal request received:', payload.new);
+            setRequests((prevRequests) => [payload.new as WithdrawRequest, ...prevRequests]);
+            // Mark this request as new for highlighting
+            setNewRequestIds((prev) => new Set([...prev, payload.new.id]));
+            // Auto-remove the highlight after 30 seconds
+            setTimeout(() => {
+              setNewRequestIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(payload.new.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'withdraw_requests'
+          },
+          (payload) => {
+            console.log('Withdrawal request updated:', payload.new);
+            setRequests((prevRequests) => 
+              prevRequests.map((request) => 
+                request.id === payload.new.id ? payload.new as WithdrawRequest : request
+              )
+            );
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(requestsChannel);
+      };
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchWithdrawRequests = async () => {
     try {
@@ -252,9 +305,20 @@ const WithdrawalRequests = () => {
                 </TableRow>
               ) : (
                 requests.map((request) => (
-                  <TableRow key={request.id}>
+                  <TableRow 
+                    key={request.id}
+                    className={newRequestIds.has(request.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
+                  >
                     <TableCell className="text-sm">
-                      {new Date(request.created_at).toLocaleString()}
+                      <div className="flex items-center gap-2">
+                        {new Date(request.created_at).toLocaleString()}
+                        {newRequestIds.has(request.id) && (
+                          <Badge variant="destructive" className="text-xs animate-bounce">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            NEW
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div>

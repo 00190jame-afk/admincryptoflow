@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Search, Send, Users, Eye, Plus } from 'lucide-react';
+import { MessageSquare, Search, Send, Users, Eye, Plus, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface UserMessage {
   id: string;
@@ -34,15 +35,67 @@ const UserMessages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
+  const { markAsRead: markNotificationAsRead } = useNotifications();
 
   useEffect(() => {
     if (!adminLoading) {
       fetchMessages();
       fetchProfiles();
+      
+      // Mark messages as read when component loads
+      markNotificationAsRead('userMessages');
+      
+      // Set up real-time subscription for new messages
+      const messagesChannel = supabase
+        .channel('user-messages-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages'
+          },
+          (payload) => {
+            console.log('New user message received:', payload.new);
+            setMessages((prevMessages) => [payload.new as UserMessage, ...prevMessages]);
+            // Mark this message as new for highlighting
+            setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
+            // Auto-remove the highlight after 30 seconds
+            setTimeout(() => {
+              setNewMessageIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(payload.new.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages'
+          },
+          (payload) => {
+            console.log('User message updated:', payload.new);
+            setMessages((prevMessages) => 
+              prevMessages.map((message) => 
+                message.id === payload.new.id ? payload.new as UserMessage : message
+              )
+            );
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(messagesChannel);
+      };
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds, markNotificationAsRead]);
 
   const fetchMessages = async () => {
     try {
@@ -102,7 +155,7 @@ const UserMessages = () => {
     }
   };
 
-  const markAsRead = async (messageId: string) => {
+  const markMessageAsRead = async (messageId: string) => {
     try {
       const { error } = await supabase
         .from('messages')
@@ -329,9 +382,20 @@ const UserMessages = () => {
                 </TableRow>
               ) : (
                 filteredMessages.map((message) => (
-                  <TableRow key={message.id}>
+                  <TableRow 
+                    key={message.id}
+                    className={newMessageIds.has(message.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
+                  >
                     <TableCell className="text-sm">
-                      {new Date(message.created_at).toLocaleString()}
+                      <div className="flex items-center gap-2">
+                        {new Date(message.created_at).toLocaleString()}
+                        {newMessageIds.has(message.id) && (
+                          <Badge variant="destructive" className="text-xs animate-bounce">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            NEW
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div>
@@ -355,7 +419,7 @@ const UserMessages = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => markAsRead(message.id)}
+                            onClick={() => markMessageAsRead(message.id)}
                           >
                             Mark Read
                           </Button>

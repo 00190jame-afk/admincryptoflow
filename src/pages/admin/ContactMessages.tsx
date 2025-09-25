@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Mail, Search, MessageSquare, Eye, Trash2 } from 'lucide-react';
+import { Mail, Search, MessageSquare, Eye, Trash2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface ContactMessage {
   id: string;
@@ -26,15 +27,51 @@ const ContactMessages = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
   const [assignedEmails, setAssignedEmails] = useState<string[]>([]);
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
+  const { markAsRead } = useNotifications();
 
   useEffect(() => {
     if (!adminLoading) {
       fetchAssignedEmails();
       fetchContactMessages();
+      
+      // Mark contact messages as read when component loads
+      markAsRead('contactMessages');
+      
+      // Set up real-time subscription for new contact messages
+      const contactChannel = supabase
+        .channel('contact-messages-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'contact_messages'
+          },
+          (payload) => {
+            console.log('New contact message received:', payload.new);
+            setMessages((prevMessages) => [payload.new as ContactMessage, ...prevMessages]);
+            // Mark this message as new for highlighting
+            setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
+            // Auto-remove the highlight after 30 seconds
+            setTimeout(() => {
+              setNewMessageIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(payload.new.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(contactChannel);
+      };
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchAssignedEmails = async () => {
     if (isSuperAdmin || assignedUserIds.length === 0) {
@@ -226,9 +263,20 @@ const ContactMessages = () => {
                 </TableRow>
               ) : (
                 filteredMessages.map((message) => (
-                  <TableRow key={message.id}>
+                  <TableRow 
+                    key={message.id}
+                    className={newMessageIds.has(message.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
+                  >
                     <TableCell className="text-sm">
-                      {new Date(message.created_at).toLocaleDateString()}
+                      <div className="flex items-center gap-2">
+                        {new Date(message.created_at).toLocaleDateString()}
+                        {newMessageIds.has(message.id) && (
+                          <Badge variant="destructive" className="text-xs animate-bounce">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            NEW
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div>
