@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface Trade {
   id: string;
@@ -33,16 +34,70 @@ interface Trade {
 const TradeManagement = () => {
   const { toast } = useToast();
   const { isSuperAdmin } = useAuth();
+  const { markAsRead } = useNotifications();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [updating, setUpdating] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
+  const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchTrades();
-  }, []);
+    
+    // Mark trades as read when component loads
+    markAsRead('trades');
+    
+    // Set up real-time subscription for new trades
+    const tradesChannel = supabase
+      .channel('trades-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'trades'
+        },
+        (payload) => {
+          console.log('New trade received:', payload.new);
+          // Add the new trade to the beginning of the list
+          setTrades((prevTrades) => [payload.new as Trade, ...prevTrades]);
+          // Mark this trade as new for highlighting
+          setNewTradeIds((prev) => new Set([...prev, payload.new.id]));
+          // Auto-remove the highlight after 30 seconds
+          setTimeout(() => {
+            setNewTradeIds((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(payload.new.id);
+              return newSet;
+            });
+          }, 30000);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'trades'
+        },
+        (payload) => {
+          console.log('Trade updated:', payload.new);
+          // Update the existing trade in the list
+          setTrades((prevTrades) => 
+            prevTrades.map((trade) => 
+              trade.id === payload.new.id ? payload.new as Trade : trade
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tradesChannel);
+    };
+  }, [markAsRead]);
 
   const fetchTrades = async () => {
     try {
@@ -255,9 +310,20 @@ const TradeManagement = () => {
                 </TableRow>
               ) : (
                 filteredTrades.map((trade) => (
-                  <TableRow key={trade.id}>
+                  <TableRow 
+                    key={trade.id} 
+                    className={newTradeIds.has(trade.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
+                  >
                     <TableCell className="font-mono text-xs">
-                      {trade.id.substring(0, 8)}...
+                      <div className="flex items-center space-x-2">
+                        <span>{trade.id.substring(0, 8)}...</span>
+                        {newTradeIds.has(trade.id) && (
+                          <Badge variant="destructive" className="text-xs animate-bounce">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            NEW
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{trade.email}</TableCell>
                     <TableCell className="font-medium">{trade.trading_pair}</TableCell>
