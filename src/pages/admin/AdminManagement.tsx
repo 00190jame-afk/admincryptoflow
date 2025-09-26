@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { notificationAudio } from '@/lib/NotificationAudio';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -55,12 +56,44 @@ const AdminManagement = () => {
   const [creating, setCreating] = useState(false);
   const [newInviteRole, setNewInviteRole] = useState('admin');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [newAdminIds, setNewAdminIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isSuperAdmin) {
       fetchAdmins();
       fetchInviteCodes();
       fetchAdminInviteCodes();
+      
+      // Set up real-time subscription for new admins
+      const channel = supabase
+        .channel('admin-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'admin_profiles'
+          },
+          (payload) => {
+            const newAdmin = payload.new as AdminProfile;
+            setAdmins(prev => [newAdmin, ...prev]);
+            setNewAdminIds(prev => new Set([...prev, newAdmin.id]));
+            notificationAudio.play();
+            
+            setTimeout(() => {
+              setNewAdminIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(newAdmin.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     } else if (user) {
       fetchInviteCodes();
     }
@@ -361,8 +394,20 @@ const AdminManagement = () => {
                 admins.map((admin) => {
                   const adminCode = inviteCodes.find(code => code.created_by === admin.user_id);
                   return (
-                    <TableRow key={admin.id}>
-                      <TableCell className="font-medium">{admin.full_name || admin.email}</TableCell>
+                    <TableRow 
+                      key={admin.id}
+                      className={newAdminIds.has(admin.id) ? "bg-red-50 dark:bg-red-950/20 animate-in fade-in duration-500" : ""}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {admin.full_name || admin.email}
+                          {newAdminIds.has(admin.id) && (
+                            <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{admin.email}</TableCell>
                       <TableCell>
                         <Badge variant={admin.role === 'super_admin' ? 'default' : 'secondary'}>

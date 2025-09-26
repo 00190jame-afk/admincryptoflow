@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { notificationAudio } from '@/lib/NotificationAudio';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -27,9 +28,47 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [newUserIds, setNewUserIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchUsers();
+    
+    // Set up real-time subscription for new users
+    const channel = supabase
+      .channel('profiles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'profiles'
+        },
+        (payload) => {
+          console.log('New user profile created:', payload);
+          const newUser = payload.new as any;
+          
+          // Add to users list and mark as new
+          setUsers(prev => [newUser, ...prev]);
+          setNewUserIds(prev => new Set([...prev, newUser.id]));
+          
+          // Play notification sound
+          notificationAudio.play();
+          
+          // Auto-remove highlight after 30 seconds
+          setTimeout(() => {
+            setNewUserIds(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(newUser.id);
+              return newSet;
+            });
+          }, 30000);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchUsers = async () => {
@@ -174,8 +213,20 @@ const UserManagement = () => {
                 </TableRow>
               ) : (
                 filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableRow 
+                    key={user.id}
+                    className={newUserIds.has(user.id) ? "bg-red-50 dark:bg-red-950/20 animate-in fade-in duration-500" : ""}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {user.email}
+                        {newUserIds.has(user.id) && (
+                          <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {user.first_name} {user.last_name}
                     </TableCell>

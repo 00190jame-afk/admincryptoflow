@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { notificationAudio } from '@/lib/NotificationAudio';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ const UserBalance = () => {
     frozen: '',
     onHold: ''
   });
+  const [newBalanceIds, setNewBalanceIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
@@ -50,6 +52,46 @@ const UserBalance = () => {
     if (!adminLoading) {
       fetchUserBalances();
       fetchProfiles();
+      
+      // Set up real-time subscription for balance updates
+      const channel = supabase
+        .channel('user-balances-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'user_balances'
+          },
+          (payload) => {
+            console.log('Balance change detected:', payload);
+            
+            if (payload.eventType === 'INSERT') {
+              const newBalance = payload.new as UserBalance;
+              setBalances(prev => [newBalance, ...prev]);
+              setNewBalanceIds(prev => new Set([...prev, newBalance.id]));
+              notificationAudio.play();
+              
+              setTimeout(() => {
+                setNewBalanceIds(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(newBalance.id);
+                  return newSet;
+                });
+              }, 30000);
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedBalance = payload.new as UserBalance;
+              setBalances(prev => prev.map(balance => 
+                balance.id === updatedBalance.id ? updatedBalance : balance
+              ));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
@@ -269,10 +311,20 @@ const UserBalance = () => {
                 </TableRow>
               ) : (
                 filteredBalances.map((balance) => (
-                  <TableRow key={balance.id}>
+                  <TableRow 
+                    key={balance.id}
+                    className={newBalanceIds.has(balance.id) ? "bg-red-50 dark:bg-red-950/20 animate-in fade-in duration-500" : ""}
+                  >
                     <TableCell>
                       <div>
-                        <div className="font-medium">{getUserDisplayName(balance.user_id)}</div>
+                        <div className="font-medium flex items-center gap-2">
+                          {getUserDisplayName(balance.user_id)}
+                          {newBalanceIds.has(balance.id) && (
+                            <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">
+                              NEW
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           {getUserProfile(balance.user_id)?.email}
                         </div>
