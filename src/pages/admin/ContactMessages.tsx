@@ -94,7 +94,7 @@ const ContactMessages = () => {
     }
   };
 
-  const fetchContactMessages = async () => {
+  const fetchContactMessages = async (retryCount = 0) => {
     try {
       let query = supabase
         .from('contact_messages')
@@ -117,9 +117,17 @@ const ContactMessages = () => {
       setMessages(data || []);
     } catch (error) {
       console.error('Error fetching contact messages:', error);
+      
+      // Retry up to 2 times with delay for network issues
+      if (retryCount < 2 && error.message?.includes('Failed to fetch')) {
+        console.log(`Retrying fetch contact messages, attempt ${retryCount + 1}`);
+        setTimeout(() => fetchContactMessages(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load contact messages",
+        description: "Failed to load contact messages. Please refresh the page.",
         variant: "destructive",
       });
     } finally {
