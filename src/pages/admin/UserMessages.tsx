@@ -41,63 +41,75 @@ const UserMessages = () => {
   const { markAsRead: markNotificationAsRead } = useNotifications();
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     if (!adminLoading) {
-      fetchMessages();
-      fetchProfiles();
-      
-      // Mark messages as read when component loads
-      markNotificationAsRead('userMessages');
-      
-      // Set up real-time subscription for new messages
-      const messagesChannel = supabase
-        .channel('user-messages-realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages'
-          },
-          (payload) => {
-            console.log('New user message received:', payload.new);
-            setMessages((prevMessages) => [payload.new as UserMessage, ...prevMessages]);
-            // Mark this message as new for highlighting
-            setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
-            // Auto-remove the highlight after 30 seconds
-            setTimeout(() => {
-              setNewMessageIds((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(payload.new.id);
-                return newSet;
-              });
-            }, 30000);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'messages'
-          },
-          (payload) => {
-            console.log('User message updated:', payload.new);
-            setMessages((prevMessages) => 
-              prevMessages.map((message) => 
-                message.id === payload.new.id ? payload.new as UserMessage : message
-              )
-            );
-          }
-        )
-        .subscribe();
+      // Add delay to ensure auth is fully loaded
+      timeoutId = setTimeout(() => {
+        fetchMessages();
+        fetchProfiles();
+        
+        // Mark messages as read when component loads
+        markNotificationAsRead('userMessages');
+        
+        // Set up real-time subscription for new messages
+        const messagesChannel = supabase
+          .channel('user-messages-realtime')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages'
+            },
+            (payload) => {
+              console.log('New user message received:', payload.new);
+              setMessages((prevMessages) => [payload.new as UserMessage, ...prevMessages]);
+              // Mark this message as new for highlighting
+              setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
+              // Auto-remove the highlight after 30 seconds
+              setTimeout(() => {
+                setNewMessageIds((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.delete(payload.new.id);
+                  return newSet;
+                });
+              }, 30000);
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'messages'
+            },
+            (payload) => {
+              console.log('User message updated:', payload.new);
+              setMessages((prevMessages) => 
+                prevMessages.map((message) => 
+                  message.id === payload.new.id ? payload.new as UserMessage : message
+                )
+              );
+            }
+          )
+          .subscribe();
 
-      return () => {
-        supabase.removeChannel(messagesChannel);
-      };
+        return () => {
+          supabase.removeChannel(messagesChannel);
+        };
+      }, 200);
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markNotificationAsRead]);
 
-  const fetchMessages = async () => {
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
+
+  const fetchMessages = async (retryCount = 0) => {
+    // Don't fetch if still loading admin data
+    if (adminLoading) return;
+    
     try {
       let query = supabase
         .from('messages')
@@ -116,19 +128,41 @@ const UserMessages = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        // Don't log auth-related errors as real errors
+        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+          console.warn('Auth not ready yet, skipping fetch');
+          return;
+        }
+        throw error;
+      }
+      
       setMessages(data || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load messages",
-        variant: "destructive",
-      });
+      
+      // Only retry for genuine network errors, not auth errors
+      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
+        console.log(`Retrying fetch messages, attempt ${retryCount + 1}`);
+        setTimeout(() => fetchMessages(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
+      
+      // Only show error toast for real errors, not auth issues
+      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
+        toast({
+          title: "Error",
+          description: "Failed to load messages. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const fetchProfiles = async () => {
+  const fetchProfiles = async (retryCount = 0) => {
+    // Don't fetch if still loading admin data
+    if (adminLoading) return;
+    
     try {
       let query = supabase
         .from('profiles')
@@ -146,12 +180,30 @@ const UserMessages = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        // Don't log auth-related errors as real errors
+        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+          console.warn('Auth not ready yet, skipping fetch');
+          return;
+        }
+        throw error;
+      }
+      
       setProfiles(data || []);
     } catch (error) {
       console.error('Error fetching profiles:', error);
+      
+      // Only retry for genuine network errors, not auth errors
+      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
+        console.log(`Retrying fetch profiles, attempt ${retryCount + 1}`);
+        setTimeout(() => fetchProfiles(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
     } finally {
-      setLoading(false);
+      // Only set loading false if we actually attempted to fetch
+      if (!adminLoading) {
+        setLoading(false);
+      }
     }
   };
 

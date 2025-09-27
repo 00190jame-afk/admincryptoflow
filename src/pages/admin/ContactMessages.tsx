@@ -36,7 +36,7 @@ const ContactMessages = () => {
     let timeoutId: NodeJS.Timeout;
     
     if (!adminLoading) {
-      // Add small delay to ensure auth is fully loaded
+      // Add delay to ensure auth is fully loaded
       timeoutId = setTimeout(() => {
         fetchAssignedEmails();
         fetchContactMessages();
@@ -74,13 +74,13 @@ const ContactMessages = () => {
         return () => {
           supabase.removeChannel(contactChannel);
         };
-      }, 100);
+      }, 200);
     }
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
   const fetchAssignedEmails = async () => {
     if (isSuperAdmin || assignedUserIds.length === 0) {
@@ -154,7 +154,10 @@ const ContactMessages = () => {
         });
       }
     } finally {
-      setLoading(false);
+      // Only set loading false if we actually attempted to fetch
+      if (!adminLoading) {
+        setLoading(false);
+      }
     }
   };
 
