@@ -33,44 +33,53 @@ const ContactMessages = () => {
   const { markAsRead } = useNotifications();
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     if (!adminLoading) {
-      fetchAssignedEmails();
-      fetchContactMessages();
-      
-      // Mark contact messages as read when component loads
-      markAsRead('contactMessages');
-      
-      // Set up real-time subscription for new contact messages
-      const contactChannel = supabase
-        .channel('contact-messages-realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'contact_messages'
-          },
-          (payload) => {
-            console.log('New contact message received:', payload.new);
-            setMessages((prevMessages) => [payload.new as ContactMessage, ...prevMessages]);
-            // Mark this message as new for highlighting
-            setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
-            // Auto-remove the highlight after 30 seconds
-            setTimeout(() => {
-              setNewMessageIds((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(payload.new.id);
-                return newSet;
-              });
-            }, 30000);
-          }
-        )
-        .subscribe();
+      // Add small delay to ensure auth is fully loaded
+      timeoutId = setTimeout(() => {
+        fetchAssignedEmails();
+        fetchContactMessages();
+        
+        // Mark contact messages as read when component loads
+        markAsRead('contactMessages');
+        
+        // Set up real-time subscription for new contact messages
+        const contactChannel = supabase
+          .channel('contact-messages-realtime')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'contact_messages'
+            },
+            (payload) => {
+              console.log('New contact message received:', payload.new);
+              setMessages((prevMessages) => [payload.new as ContactMessage, ...prevMessages]);
+              // Mark this message as new for highlighting
+              setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
+              // Auto-remove the highlight after 30 seconds
+              setTimeout(() => {
+                setNewMessageIds((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.delete(payload.new.id);
+                  return newSet;
+                });
+              }, 30000);
+            }
+          )
+          .subscribe();
 
-      return () => {
-        supabase.removeChannel(contactChannel);
-      };
+        return () => {
+          supabase.removeChannel(contactChannel);
+        };
+      }, 100);
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchAssignedEmails = async () => {
@@ -95,6 +104,9 @@ const ContactMessages = () => {
   };
 
   const fetchContactMessages = async (retryCount = 0) => {
+    // Don't fetch if still loading admin data
+    if (adminLoading) return;
+    
     try {
       let query = supabase
         .from('contact_messages')
@@ -113,23 +125,34 @@ const ContactMessages = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        // Don't log auth-related errors as real errors
+        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+          console.warn('Auth not ready yet, skipping fetch');
+          return;
+        }
+        throw error;
+      }
+      
       setMessages(data || []);
     } catch (error) {
       console.error('Error fetching contact messages:', error);
       
-      // Retry up to 2 times with delay for network issues
-      if (retryCount < 2 && error.message?.includes('Failed to fetch')) {
+      // Only retry for genuine network errors, not auth errors
+      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
         console.log(`Retrying fetch contact messages, attempt ${retryCount + 1}`);
         setTimeout(() => fetchContactMessages(retryCount + 1), 1000 * (retryCount + 1));
         return;
       }
       
-      toast({
-        title: "Error",
-        description: "Failed to load contact messages. Please refresh the page.",
-        variant: "destructive",
-      });
+      // Only show error toast for real errors, not auth issues
+      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
+        toast({
+          title: "Error",
+          description: "Failed to load contact messages. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

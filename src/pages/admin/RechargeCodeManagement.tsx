@@ -40,90 +40,129 @@ const RechargeCodeManagement = () => {
   const { markAsRead } = useNotifications();
 
   useEffect(() => {
-    fetchRechargeCodes();
-    fetchProfiles();
-    
-    // Mark codes as read when component loads - no specific notification type for recharge codes
-    
-    // Set up real-time subscription for new codes
-    const codesChannel = supabase
-      .channel('recharge-codes-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'recharge_codes'
-        },
-        (payload) => {
-          console.log('New recharge code created:', payload.new);
-          setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
-          // Mark this code as new for highlighting
-          setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
-          // Auto-remove the highlight after 30 seconds
-          setTimeout(() => {
-            setNewCodeIds((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(payload.new.id);
-              return newSet;
-            });
-          }, 30000);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'recharge_codes'
-        },
-        (payload) => {
-          console.log('Recharge code updated:', payload.new);
-          setCodes((prevCodes) => 
-            prevCodes.map((code) => 
-              code.id === payload.new.id ? payload.new as RechargeCode : code
-            )
-          );
-        }
-      )
-      .subscribe();
+    // Add small delay to ensure auth is ready
+    const timeoutId = setTimeout(() => {
+      fetchRechargeCodes();
+      fetchProfiles();
+      
+      // Set up real-time subscription for new codes
+      const codesChannel = supabase
+        .channel('recharge-codes-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'recharge_codes'
+          },
+          (payload) => {
+            console.log('New recharge code created:', payload.new);
+            setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
+            // Mark this code as new for highlighting
+            setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
+            // Auto-remove the highlight after 30 seconds
+            setTimeout(() => {
+              setNewCodeIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(payload.new.id);
+                return newSet;
+              });
+            }, 30000);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'recharge_codes'
+          },
+          (payload) => {
+            console.log('Recharge code updated:', payload.new);
+            setCodes((prevCodes) => 
+              prevCodes.map((code) => 
+                code.id === payload.new.id ? payload.new as RechargeCode : code
+              )
+            );
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(codesChannel);
+      };
+    }, 100);
 
     return () => {
-      supabase.removeChannel(codesChannel);
+      clearTimeout(timeoutId);
     };
   }, [markAsRead]);
 
-  const fetchRechargeCodes = async () => {
+  const fetchRechargeCodes = async (retryCount = 0) => {
     try {
       const { data, error } = await supabase
         .from('recharge_codes')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // Don't log auth-related errors as real errors
+        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+          console.warn('Auth not ready yet, skipping fetch');
+          return;
+        }
+        throw error;
+      }
+      
       setCodes(data || []);
     } catch (error) {
       console.error('Error fetching recharge codes:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load recharge codes",
-        variant: "destructive",
-      });
+      
+      // Retry for network errors, but not auth errors
+      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
+        console.log(`Retrying fetch recharge codes, attempt ${retryCount + 1}`);
+        setTimeout(() => fetchRechargeCodes(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
+      
+      // Only show error toast for real errors, not auth issues
+      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
+        toast({
+          title: "Error",
+          description: "Failed to load recharge codes",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchProfiles = async () => {
+  const fetchProfiles = async (retryCount = 0) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, email, first_name, last_name');
 
-      if (error) throw error;
+      if (error) {
+        // Don't log auth-related errors as real errors
+        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+          console.warn('Auth not ready yet, skipping profiles fetch');
+          return;
+        }
+        throw error;
+      }
+      
       setProfiles(data || []);
     } catch (error) {
       console.error('Error fetching profiles:', error);
+      
+      // Retry for network errors, but not auth errors
+      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
+        console.log(`Retrying fetch profiles, attempt ${retryCount + 1}`);
+        setTimeout(() => fetchProfiles(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
     }
   };
 
