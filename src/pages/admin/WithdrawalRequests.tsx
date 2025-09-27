@@ -98,7 +98,7 @@ const WithdrawalRequests = () => {
         supabase.removeChannel(requestsChannel);
       };
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds]);
 
   const fetchWithdrawRequests = async () => {
     try {
