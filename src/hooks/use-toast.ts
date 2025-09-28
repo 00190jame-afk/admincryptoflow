@@ -3,7 +3,7 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -132,17 +132,30 @@ function dispatch(action: Action) {
   });
 }
 
+const toastQueue: Set<string> = new Set();
+
 type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
+  // Prevent duplicate toasts with same title and description
+  const toastKey = `${props.title || ''}-${props.description || ''}`;
+  if (toastQueue.has(toastKey)) {
+    return { id: '', dismiss: () => {}, update: () => {} };
+  }
+
   const id = genId();
+  toastQueue.add(toastKey);
 
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
+  
+  const dismiss = () => {
+    dispatch({ type: "DISMISS_TOAST", toastId: id });
+    toastQueue.delete(toastKey);
+  };
 
   dispatch({
     type: "ADD_TOAST",
@@ -155,6 +168,11 @@ function toast({ ...props }: Toast) {
       },
     },
   });
+
+  // Auto-cleanup from queue after delay
+  setTimeout(() => {
+    toastQueue.delete(toastKey);
+  }, TOAST_REMOVE_DELAY);
 
   return {
     id: id,
@@ -174,7 +192,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+  }, []);
 
   return {
     ...state,

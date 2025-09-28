@@ -1,165 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Mail, Search, MessageSquare, Eye, Trash2, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Search, Trash2, MessageSquare, Users, Calendar, Eye } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminRole } from '@/hooks/useAdminRole';
-import { useNotifications } from '@/contexts/NotificationContext';
-
-interface ContactMessage {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  subject: string;
-  message: string;
-  created_at: string;
-}
+import { useContactMessages } from '@/hooks/admin/useContactMessages';
+import { SkeletonCard, SkeletonTable } from '@/components/ui/skeleton-card';
+import { supabase } from '@/integrations/supabase/client';
 
 const ContactMessages = () => {
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
-  const [assignedEmails, setAssignedEmails] = useState<string[]>([]);
-  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const { messages, isLoading, assignedEmails } = useContactMessages();
   const { toast } = useToast();
-  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
-  const { markAsRead } = useNotifications();
-
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    if (!adminLoading) {
-      // Add delay to ensure auth is fully loaded
-      timeoutId = setTimeout(() => {
-        fetchAssignedEmails();
-        fetchContactMessages();
-        
-        // Mark contact messages as read when component loads
-        markAsRead('contactMessages');
-        
-        // Set up real-time subscription for new contact messages
-        const contactChannel = supabase
-          .channel('contact-messages-realtime')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'contact_messages'
-            },
-            (payload) => {
-              console.log('New contact message received:', payload.new);
-              setMessages((prevMessages) => [payload.new as ContactMessage, ...prevMessages]);
-              // Mark this message as new for highlighting
-              setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
-              // Auto-remove the highlight after 30 seconds
-              setTimeout(() => {
-                setNewMessageIds((prev) => {
-                  const newSet = new Set(prev);
-                  newSet.delete(payload.new.id);
-                  return newSet;
-                });
-              }, 30000);
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(contactChannel);
-        };
-      }, 200);
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
-
-  const fetchAssignedEmails = async () => {
-    if (isSuperAdmin || assignedUserIds.length === 0) {
-      setAssignedEmails([]);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('email')
-        .in('user_id', assignedUserIds)
-        .not('email', 'is', null);
-
-      if (error) throw error;
-      setAssignedEmails(data?.map(p => p.email).filter(Boolean) || []);
-    } catch (error) {
-      console.error('Error fetching assigned emails:', error);
-      setAssignedEmails([]);
-    }
-  };
-
-  const fetchContactMessages = async (retryCount = 0) => {
-    // Don't fetch if still loading admin data
-    if (adminLoading) return;
-    
-    try {
-      let query = supabase
-        .from('contact_messages')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Filter contact messages for regular admins to only show messages from assigned users
-      if (!isSuperAdmin) {
-        if (assignedEmails.length > 0) {
-          query = query.in('email', assignedEmails);
-        } else {
-          // Regular admin with no assigned users should see no data
-          query = query.eq('email', 'no-email@nonexistent.com');
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        // Don't log auth-related errors as real errors
-        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          console.warn('Auth not ready yet, skipping fetch');
-          return;
-        }
-        throw error;
-      }
-      
-      setMessages(data || []);
-    } catch (error) {
-      console.error('Error fetching contact messages:', error);
-      
-      // Only retry for genuine network errors, not auth errors
-      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        console.log(`Retrying fetch contact messages, attempt ${retryCount + 1}`);
-        setTimeout(() => fetchContactMessages(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-      
-      // Only show error toast for real errors, not auth issues
-      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
-        toast({
-          title: "Error",
-          description: "Failed to load contact messages. Please refresh the page.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      // Only set loading false if we actually attempted to fetch
-      if (!adminLoading) {
-        setLoading(false);
-      }
-    }
-  };
 
   const deleteMessage = async (id: string) => {
     try {
@@ -169,8 +26,7 @@ const ContactMessages = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
-      setMessages(messages.filter(m => m.id !== id));
+
       toast({
         title: "Success",
         description: "Message deleted successfully",
@@ -186,23 +42,43 @@ const ContactMessages = () => {
   };
 
   const filteredMessages = messages.filter(message =>
-    message.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    message.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    message.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    message.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    message.message.toLowerCase().includes(searchTerm.toLowerCase())
+    message.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    message.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    message.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    message.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    message.message?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Contact Messages</h1>
+          <p className="text-muted-foreground">
+            Manage and respond to contact form submissions
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonTable />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Contact Messages</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Contact Messages</h1>
         <p className="text-muted-foreground">
-          Manage and respond to customer contact messages
+          Manage and respond to contact form submissions
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Messages</CardTitle>
@@ -215,7 +91,7 @@ const ContactMessages = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Today's Messages</CardTitle>
-            <Mail className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -244,7 +120,7 @@ const ContactMessages = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Unique Contacts</CardTitle>
-            <Mail className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -283,13 +159,7 @@ const ContactMessages = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center">
-                    Loading contact messages...
-                  </TableCell>
-                </TableRow>
-              ) : filteredMessages.length === 0 ? (
+              {filteredMessages.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center">
                     No contact messages found
@@ -297,25 +167,12 @@ const ContactMessages = () => {
                 </TableRow>
               ) : (
                 filteredMessages.map((message) => (
-                  <TableRow 
-                    key={message.id}
-                    className={newMessageIds.has(message.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
-                  >
+                  <TableRow key={message.id}>
                     <TableCell className="text-sm">
-                      <div className="flex items-center gap-2">
-                        {new Date(message.created_at).toLocaleDateString()}
-                        {newMessageIds.has(message.id) && (
-                          <Badge variant="destructive" className="text-xs animate-bounce">
-                            <Sparkles className="h-3 w-3 mr-1" />
-                            NEW
-                          </Badge>
-                        )}
-                      </div>
+                      {new Date(message.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{message.first_name} {message.last_name}</div>
-                      </div>
+                      <div className="font-medium">{message.first_name} {message.last_name}</div>
                     </TableCell>
                     <TableCell>{message.email}</TableCell>
                     <TableCell className="font-medium">{message.subject}</TableCell>
@@ -373,14 +230,31 @@ const ContactMessages = () => {
                             )}
                           </DialogContent>
                         </Dialog>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => deleteMessage(message.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Message</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this message? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteMessage(message.id)}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>

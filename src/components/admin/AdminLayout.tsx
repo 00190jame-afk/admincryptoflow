@@ -34,19 +34,17 @@ const AdminLayout = () => {
   }
 
   return (
-    <NotificationProvider>
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          <AdminSidebar />
-          <div className="flex-1">
-            <AdminHeader />
-            <main className="p-6">
-              <Outlet />
-            </main>
-          </div>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AdminSidebar />
+        <div className="flex-1">
+          <AdminHeader />
+          <main className="p-6">
+            <Outlet />
+          </main>
         </div>
-      </SidebarProvider>
-    </NotificationProvider>
+      </div>
+    </SidebarProvider>
   );
 };
 

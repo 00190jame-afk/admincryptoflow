@@ -1,213 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Search, Send, Users, Eye, Plus, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Search, MessageSquare, Users, Calendar, Eye } from 'lucide-react';
+import { useUserMessages } from '@/hooks/admin/useUserMessages';
+import { SkeletonCard, SkeletonTable } from '@/components/ui/skeleton-card';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminRole } from '@/hooks/useAdminRole';
-import { useNotifications } from '@/contexts/NotificationContext';
-
-interface UserMessage {
-  id: string;
-  user_id: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-}
-
-interface UserProfile {
-  user_id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-}
 
 const UserMessages = () => {
-  const [messages, setMessages] = useState<UserMessage[]>([]);
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
-  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const { messages, isLoading } = useUserMessages();
   const { toast } = useToast();
-  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
-  const { markAsRead: markNotificationAsRead } = useNotifications();
 
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    if (!adminLoading) {
-      // Add delay to ensure auth is fully loaded
-      timeoutId = setTimeout(() => {
-        fetchMessages();
-        fetchProfiles();
-        
-        // Mark messages as read when component loads
-        markNotificationAsRead('userMessages');
-        
-        // Set up real-time subscription for new messages
-        const messagesChannel = supabase
-          .channel('user-messages-realtime')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'messages'
-            },
-            (payload) => {
-              console.log('New user message received:', payload.new);
-              setMessages((prevMessages) => [payload.new as UserMessage, ...prevMessages]);
-              // Mark this message as new for highlighting
-              setNewMessageIds((prev) => new Set([...prev, payload.new.id]));
-              // Auto-remove the highlight after 30 seconds
-              setTimeout(() => {
-                setNewMessageIds((prev) => {
-                  const newSet = new Set(prev);
-                  newSet.delete(payload.new.id);
-                  return newSet;
-                });
-              }, 30000);
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'messages'
-            },
-            (payload) => {
-              console.log('User message updated:', payload.new);
-              setMessages((prevMessages) => 
-                prevMessages.map((message) => 
-                  message.id === payload.new.id ? payload.new as UserMessage : message
-                )
-              );
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(messagesChannel);
-        };
-      }, 200);
-    }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
-
-  const fetchMessages = async (retryCount = 0) => {
-    // Don't fetch if still loading admin data
-    if (adminLoading) return;
-    
-    try {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Filter messages for regular admins to only show assigned users
-      if (!isSuperAdmin) {
-        if (assignedUserIds.length > 0) {
-          query = query.in('user_id', assignedUserIds);
-        } else {
-          // Regular admin with no assigned users should see no data
-          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000');
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        // Don't log auth-related errors as real errors
-        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          console.warn('Auth not ready yet, skipping fetch');
-          return;
-        }
-        throw error;
-      }
-      
-      setMessages(data || []);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      
-      // Only retry for genuine network errors, not auth errors
-      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        console.log(`Retrying fetch messages, attempt ${retryCount + 1}`);
-        setTimeout(() => fetchMessages(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-      
-      // Only show error toast for real errors, not auth issues
-      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
-        toast({
-          title: "Error",
-          description: "Failed to load messages. Please refresh the page.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const fetchProfiles = async (retryCount = 0) => {
-    // Don't fetch if still loading admin data
-    if (adminLoading) return;
-    
-    try {
-      let query = supabase
-        .from('profiles')
-        .select('user_id, email, first_name, last_name');
-
-      // Filter profiles for regular admins to only show assigned users
-      if (!isSuperAdmin) {
-        if (assignedUserIds.length > 0) {
-          query = query.in('user_id', assignedUserIds);
-        } else {
-          // Regular admin with no assigned users should see no data
-          query = query.eq('user_id', '00000000-0000-0000-0000-000000000000');
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        // Don't log auth-related errors as real errors
-        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          console.warn('Auth not ready yet, skipping fetch');
-          return;
-        }
-        throw error;
-      }
-      
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
-      
-      // Only retry for genuine network errors, not auth errors
-      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        console.log(`Retrying fetch profiles, attempt ${retryCount + 1}`);
-        setTimeout(() => fetchProfiles(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-    } finally {
-      // Only set loading false if we actually attempted to fetch
-      if (!adminLoading) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const markMessageAsRead = async (messageId: string) => {
+  const markAsRead = async (messageId: string) => {
     try {
       const { error } = await supabase
         .from('messages')
@@ -215,10 +25,11 @@ const UserMessages = () => {
         .eq('id', messageId);
 
       if (error) throw error;
-      
-      setMessages(messages.map(m => 
-        m.id === messageId ? { ...m, is_read: true } : m
-      ));
+
+      toast({
+        title: "Success",
+        description: "Message marked as read",
+      });
     } catch (error) {
       console.error('Error marking message as read:', error);
       toast({
@@ -229,59 +40,19 @@ const UserMessages = () => {
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedUserId) return;
-
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          user_id: selectedUserId,
-          message: newMessage,
-          is_read: false,
-        });
-
-      if (error) throw error;
-      
-      setNewMessage('');
-      setSelectedUserId('');
-      setShowNewMessageDialog(false);
-      fetchMessages();
-      
-      toast({
-        title: "Success",
-        description: "Message sent successfully",
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      });
+  const getUserDisplayName = (message: any) => {
+    if (message.profiles?.first_name && message.profiles?.last_name) {
+      return `${message.profiles.first_name} ${message.profiles.last_name}`;
     }
-  };
-
-  const getUserProfile = (userId: string) => {
-    return profiles.find(p => p.user_id === userId);
-  };
-
-  const getUserDisplayName = (userId: string) => {
-    const profile = getUserProfile(userId);
-    if (profile?.first_name && profile?.last_name) {
-      return `${profile.first_name} ${profile.last_name}`;
-    }
-    return profile?.email || `User ${userId.substring(0, 8)}`;
+    return message.profiles?.email || `User ${message.user_id.substring(0, 8)}`;
   };
 
   const filteredMessages = messages.filter(message => {
-    const userProfile = getUserProfile(message.user_id);
     const searchLower = searchTerm.toLowerCase();
-    
     return (
       message.message.toLowerCase().includes(searchLower) ||
-      getUserDisplayName(message.user_id).toLowerCase().includes(searchLower) ||
-      (userProfile?.email && userProfile.email.toLowerCase().includes(searchLower))
+      getUserDisplayName(message).toLowerCase().includes(searchLower) ||
+      (message.profiles?.email && message.profiles.email.toLowerCase().includes(searchLower))
     );
   });
 
@@ -290,16 +61,36 @@ const UserMessages = () => {
     new Date(m.created_at).toDateString() === new Date().toDateString()
   ).length;
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">User Messages</h1>
+          <p className="text-muted-foreground">
+            View and manage messages sent by users
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonTable />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">User Messages</h1>
+        <h1 className="text-3xl font-bold tracking-tight">User Messages</h1>
         <p className="text-muted-foreground">
-          Manage and respond to user messages and notifications
+          View and manage messages sent by users
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Messages</CardTitle>
@@ -321,7 +112,7 @@ const UserMessages = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Today's Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-blue-500" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{todayCount}</div>
@@ -342,59 +133,7 @@ const UserMessages = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            All Messages
-            <Dialog open={showNewMessageDialog} onOpenChange={setShowNewMessageDialog}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Send Message
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Send New Message</DialogTitle>
-                  <DialogDescription>
-                    Send a message to a specific user
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Select User</label>
-                    <select 
-                      className="w-full mt-1 p-2 border rounded-md"
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                    >
-                      <option value="">Choose a user...</option>
-                      {profiles.map(profile => (
-                        <option key={profile.user_id} value={profile.user_id}>
-                          {profile.first_name && profile.last_name 
-                            ? `${profile.first_name} ${profile.last_name} (${profile.email})`
-                            : profile.email
-                          }
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Message</label>
-                    <Textarea
-                      placeholder="Type your message here..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      className="mt-1"
-                      rows={4}
-                    />
-                  </div>
-                  <Button onClick={sendMessage} className="w-full">
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Message
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </CardTitle>
+          <CardTitle>All Messages</CardTitle>
           <CardDescription>
             View and manage all user messages
           </CardDescription>
@@ -420,13 +159,7 @@ const UserMessages = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center">
-                    Loading messages...
-                  </TableCell>
-                </TableRow>
-              ) : filteredMessages.length === 0 ? (
+              {filteredMessages.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center">
                     No messages found
@@ -434,26 +167,15 @@ const UserMessages = () => {
                 </TableRow>
               ) : (
                 filteredMessages.map((message) => (
-                  <TableRow 
-                    key={message.id}
-                    className={newMessageIds.has(message.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
-                  >
+                  <TableRow key={message.id}>
                     <TableCell className="text-sm">
-                      <div className="flex items-center gap-2">
-                        {new Date(message.created_at).toLocaleString()}
-                        {newMessageIds.has(message.id) && (
-                          <Badge variant="destructive" className="text-xs animate-bounce">
-                            <Sparkles className="h-3 w-3 mr-1" />
-                            NEW
-                          </Badge>
-                        )}
-                      </div>
+                      {new Date(message.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{getUserDisplayName(message.user_id)}</div>
+                        <div className="font-medium">{getUserDisplayName(message)}</div>
                         <div className="text-sm text-muted-foreground">
-                          {getUserProfile(message.user_id)?.email}
+                          {message.profiles?.email}
                         </div>
                       </div>
                     </TableCell>
@@ -471,51 +193,60 @@ const UserMessages = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => markMessageAsRead(message.id)}
+                            onClick={() => markAsRead(message.id)}
                           >
                             Mark Read
                           </Button>
                         )}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setSelectedMessage(message)}
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl">
                             <DialogHeader>
                               <DialogTitle>Message Details</DialogTitle>
                               <DialogDescription>
-                                From {getUserDisplayName(message.user_id)}
+                                From {selectedMessage && getUserDisplayName(selectedMessage)}
                               </DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="text-sm font-medium">User</label>
-                                <p>{getUserDisplayName(message.user_id)}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {getUserProfile(message.user_id)?.email}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Message</label>
-                                <div className="mt-2 p-4 bg-muted rounded-lg">
-                                  <p className="whitespace-pre-wrap">{message.message}</p>
+                            {selectedMessage && (
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-sm font-medium">User</label>
+                                    <p>{getUserDisplayName(selectedMessage)}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">Email</label>
+                                    <p>{selectedMessage.profiles?.email}</p>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Message</label>
+                                  <div className="mt-2 p-4 bg-muted rounded-lg">
+                                    <p className="whitespace-pre-wrap">{selectedMessage.message}</p>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Sent At</label>
+                                  <p>{new Date(selectedMessage.created_at).toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Status</label>
+                                  <p>
+                                    <Badge variant={selectedMessage.is_read ? "secondary" : "default"}>
+                                      {selectedMessage.is_read ? "Read" : "Unread"}
+                                    </Badge>
+                                  </p>
                                 </div>
                               </div>
-                              <div>
-                                <label className="text-sm font-medium">Sent At</label>
-                                <p>{new Date(message.created_at).toLocaleString()}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Status</label>
-                                <p>
-                                  <Badge variant={message.is_read ? "secondary" : "default"}>
-                                    {message.is_read ? "Read" : "Unread"}
-                                  </Badge>
-                                </p>
-                              </div>
-                            </div>
+                            )}
                           </DialogContent>
                         </Dialog>
                       </div>
