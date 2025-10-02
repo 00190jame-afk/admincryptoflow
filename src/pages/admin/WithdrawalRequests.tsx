@@ -62,7 +62,7 @@ const WithdrawalRequests = () => {
             table: 'withdraw_requests'
           },
           (payload) => {
-            console.log('New withdrawal request received:', payload.new);
+            // New withdrawal request received
             setRequests((prevRequests) => [payload.new as WithdrawRequest, ...prevRequests]);
             // Mark this request as new for highlighting
             setNewRequestIds((prev) => new Set([...prev, payload.new.id]));
@@ -84,7 +84,7 @@ const WithdrawalRequests = () => {
             table: 'withdraw_requests'
           },
           (payload) => {
-            console.log('Withdrawal request updated:', payload.new);
+            // Withdrawal request updated
             setRequests((prevRequests) => 
               prevRequests.map((request) => 
                 request.id === payload.new.id ? payload.new as WithdrawRequest : request

@@ -60,7 +60,7 @@ const TradeManagement = () => {
           table: 'trades'
         },
         (payload) => {
-          console.log('New trade received:', payload.new);
+          // New trade received
           // Add the new trade to the beginning of the list
           setTrades((prevTrades) => [payload.new as Trade, ...prevTrades]);
           // Mark this trade as new for highlighting
@@ -83,7 +83,7 @@ const TradeManagement = () => {
           table: 'trades'
         },
         (payload) => {
-          console.log('Trade updated:', payload.new);
+          // Trade updated
           // Update the existing trade in the list
           setTrades((prevTrades) => 
             prevTrades.map((trade) => 
@@ -155,7 +155,7 @@ const TradeManagement = () => {
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
     setUpdating(tradeId);
     try {
-      console.log('Updating trade:', tradeId, 'to result:', result);
+      // Updating trade
 
       // Call the edge function to update trade status
       const { data, error } = await supabase.functions.invoke('set-trade-win', {
@@ -182,7 +182,7 @@ const TradeManagement = () => {
         return;
       }
 
-      console.log('Trade updated successfully:', tradeId, result, data);
+      // Trade updated successfully
       toast({
         title: 'Success',
         description: `Trade marked as ${result.toUpperCase()} successfully`,

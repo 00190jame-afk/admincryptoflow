@@ -44,7 +44,7 @@ const UserManagement = () => {
           table: 'profiles'
         },
         (payload) => {
-          console.log('New user profile created:', payload);
+          // New user profile created
           const newUser = payload.new as any;
           
           // Add to users list and mark as new

@@ -56,7 +56,7 @@ const RechargeCodeManagement = () => {
             table: 'recharge_codes'
           },
           (payload) => {
-            console.log('New recharge code created:', payload.new);
+            // New recharge code created
             setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
             // Mark this code as new for highlighting
             setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
@@ -78,7 +78,7 @@ const RechargeCodeManagement = () => {
             table: 'recharge_codes'
           },
           (payload) => {
-            console.log('Recharge code updated:', payload.new);
+            // Recharge code updated
             setCodes((prevCodes) => 
               prevCodes.map((code) => 
                 code.id === payload.new.id ? payload.new as RechargeCode : code
@@ -108,7 +108,6 @@ const RechargeCodeManagement = () => {
       if (error) {
         // Don't log auth-related errors as real errors
         if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          console.warn('Auth not ready yet, skipping fetch');
           return;
         }
         throw error;
@@ -120,7 +119,7 @@ const RechargeCodeManagement = () => {
       
       // Retry for network errors, but not auth errors
       if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        console.log(`Retrying fetch recharge codes, attempt ${retryCount + 1}`);
+        // Retrying fetch
         setTimeout(() => fetchRechargeCodes(retryCount + 1), 1000 * (retryCount + 1));
         return;
       }
@@ -147,7 +146,6 @@ const RechargeCodeManagement = () => {
       if (error) {
         // Don't log auth-related errors as real errors
         if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          console.warn('Auth not ready yet, skipping profiles fetch');
           return;
         }
         throw error;
@@ -159,7 +157,7 @@ const RechargeCodeManagement = () => {
       
       // Retry for network errors, but not auth errors
       if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        console.log(`Retrying fetch profiles, attempt ${retryCount + 1}`);
+        // Retrying fetch
         setTimeout(() => fetchProfiles(retryCount + 1), 1000 * (retryCount + 1));
         return;
       }

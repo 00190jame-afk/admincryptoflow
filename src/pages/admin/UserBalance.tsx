@@ -64,7 +64,7 @@ const UserBalance = () => {
             table: 'user_balances'
           },
           (payload) => {
-            console.log('Balance change detected:', payload);
+            // Balance change detected
             
             if (payload.eventType === 'INSERT') {
               const newBalance = payload.new as UserBalance;
