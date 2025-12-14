@@ -15,8 +15,7 @@ import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
 import UserRegister from "./pages/UserRegister";
 
-import ContactMessages from "./pages/admin/ContactMessages";
-import UserMessages from "./pages/admin/UserMessages";
+import Messages from "./pages/admin/Messages";
 import RechargeCodeManagement from "./pages/admin/RechargeCodeManagement";
 import UserBalance from "./pages/admin/UserBalance";
 import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
@@ -40,8 +39,7 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="trades" element={<TradeManagement />} />
               <Route path="admins" element={<AdminManagement />} />
-              <Route path="messages" element={<UserMessages />} />
-              <Route path="contact" element={<ContactMessages />} />
+              <Route path="messages" element={<Messages />} />
               <Route path="recharge" element={<RechargeCodeManagement />} />
               <Route path="balance" element={<UserBalance />} />
               <Route path="withdrawals" element={<WithdrawalRequests />} />

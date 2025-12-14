@@ -19,7 +19,6 @@ import {
   DollarSign,
   Shield,
   MessageSquare,
-  Mail,
   CreditCard,
 } from 'lucide-react';
 
@@ -27,8 +26,7 @@ const mainItems = [
   { title: 'Dashboard', url: '/admin', icon: LayoutDashboard },
   { title: 'User Management', url: '/admin/users', icon: Users },
   { title: 'Trade Management', url: '/admin/trades', icon: TrendingUp },
-  { title: 'User Messages', url: '/admin/messages', icon: MessageSquare },
-  { title: 'Contact Messages', url: '/admin/contact', icon: Mail },
+  { title: 'Messages', url: '/admin/messages', icon: MessageSquare },
   { title: 'Recharge Codes', url: '/admin/recharge', icon: CreditCard },
   { title: 'User Balance', url: '/admin/balance', icon: DollarSign },
   { title: 'Withdrawal Requests', url: '/admin/withdrawals', icon: TrendingUp },
