@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Search, Eye, UserCheck, UserX, Phone, Globe, Wallet, Monitor } from 'lucide-react';
+import { Search, Eye, Globe, Wallet, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,27 +15,13 @@ interface User {
   id: string;
   user_id: string;
   email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  date_of_birth: string | null;
-  address: string | null;
-  city: string | null;
-  country: string | null;
-  postal_code: string | null;
-  is_verified: boolean | null;
-  role: string | null;
-  credit_score: number | null;
   username: string | null;
-  full_name: string | null;
-  avatar_url: string | null;
+  credit_score: number | null;
   wallet_address: string | null;
   ip_address: string | null;
+  ip_country: string | null;
   user_agent: string | null;
   created_at: string;
-  updated_at: string;
-  balance?: number;
-  total_trades?: number;
 }
 
 const UserManagement = () => {
@@ -50,7 +35,6 @@ const UserManagement = () => {
   useEffect(() => {
     fetchUsers();
     
-    // Set up real-time subscription for new users
     const channel = supabase
       .channel('profiles-changes')
       .on(
@@ -61,17 +45,11 @@ const UserManagement = () => {
           table: 'profiles'
         },
         (payload) => {
-          // New user profile created
-          const newUser = payload.new as any;
-          
-          // Add to users list and mark as new
+          const newUser = payload.new as User;
           setUsers(prev => [newUser, ...prev]);
           setNewUserIds(prev => new Set([...prev, newUser.id]));
-          
-          // Play notification sound
           notificationAudio.play();
           
-          // Auto-remove highlight after 30 seconds
           setTimeout(() => {
             setNewUserIds(prev => {
               const newSet = new Set(prev);
@@ -96,28 +74,15 @@ const UserManagement = () => {
           id,
           user_id,
           email,
-          first_name,
-          last_name,
-          phone,
-          date_of_birth,
-          address,
-          city,
-          country,
-          postal_code,
-          is_verified,
-          role,
-          credit_score,
           username,
-          full_name,
-          avatar_url,
+          credit_score,
           wallet_address,
           ip_address,
+          ip_country,
           user_agent,
-          created_at,
-          updated_at
+          created_at
         `);
 
-      // If not super admin, filter to only assigned users
       if (!isSuperAdmin) {
         const { data: assignedUsers } = await supabase
           .rpc('get_admin_assigned_users', { 
@@ -128,7 +93,6 @@ const UserManagement = () => {
           const userIds = assignedUsers.map((u: any) => u.user_id);
           profilesQuery = profilesQuery.in('user_id', userIds);
         } else {
-          // If no assigned users, return empty array
           setUsers([]);
           setLoading(false);
           return;
@@ -139,31 +103,7 @@ const UserManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      // Fetch balances and trade counts for each user
-      const usersWithStats = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          const [balanceResult, tradesResult] = await Promise.all([
-            supabase
-              .from('user_balances')
-              .select('balance')
-              .eq('user_id', profile.user_id)
-              .single(),
-            supabase
-              .from('trades')
-              .select('id', { count: 'exact', head: true })
-              .eq('user_id', profile.user_id)
-          ]);
-
-          return {
-            ...profile,
-            balance: balanceResult.data?.balance || 0,
-            total_trades: tradesResult.count || 0,
-          };
-        })
-      );
-
-      setUsers(usersWithStats);
+      setUsers(profiles || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -173,33 +113,22 @@ const UserManagement = () => {
 
   const filteredUsers = users.filter(user =>
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.country?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.wallet_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.ip_address?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.ip_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.ip_country?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const toggleUserVerification = async (userId: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_verified: !currentStatus })
-        .eq('user_id', userId);
-
-      if (error) throw error;
-      
-      fetchUsers(); // Refresh the list
-    } catch (error) {
-      console.error('Error updating user verification:', error);
-    }
-  };
-
-  const truncateAddress = (address: string | null, length: number = 8) => {
+  const truncateAddress = (address: string | null, length: number = 6) => {
     if (!address) return '-';
     if (address.length <= length * 2) return address;
     return `${address.slice(0, length)}...${address.slice(-length)}`;
+  };
+
+  const truncateUserAgent = (ua: string | null, length: number = 30) => {
+    if (!ua) return '-';
+    if (ua.length <= length) return ua;
+    return `${ua.slice(0, length)}...`;
   };
 
   const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -227,7 +156,7 @@ const UserManagement = () => {
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by email, name, phone, country, wallet or IP..."
+              placeholder="Search by email, username, wallet, IP or country..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-md"
@@ -240,14 +169,12 @@ const UserManagement = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Email</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Country</TableHead>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Credit Score</TableHead>
                   <TableHead>Wallet</TableHead>
                   <TableHead>IP Address</TableHead>
-                  <TableHead>Balance</TableHead>
-                  <TableHead>Trades</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead>User Agent</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -255,13 +182,13 @@ const UserManagement = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -281,37 +208,16 @@ const UserManagement = () => {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell>{user.username || '-'}</TableCell>
                       <TableCell>
-                        {user.first_name || user.last_name 
-                          ? `${user.first_name || ''} ${user.last_name || ''}`.trim() 
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {user.phone ? (
-                            <>
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">{user.phone}</span>
-                            </>
-                          ) : '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {user.country ? (
-                            <>
-                              <Globe className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">{user.country}</span>
-                            </>
-                          ) : '-'}
-                        </div>
+                        <span className="font-mono">{user.credit_score ?? '-'}</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {user.wallet_address ? (
                             <>
                               <Wallet className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm font-mono">{truncateAddress(user.wallet_address, 6)}</span>
+                              <span className="text-sm font-mono">{truncateAddress(user.wallet_address)}</span>
                             </>
                           ) : '-'}
                         </div>
@@ -327,132 +233,84 @@ const UserManagement = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="font-mono">${user.balance?.toFixed(2) || '0.00'}</span>
+                        <div className="flex items-center gap-1">
+                          {user.ip_country ? (
+                            <>
+                              <Globe className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-sm">{user.ip_country}</span>
+                            </>
+                          ) : '-'}
+                        </div>
                       </TableCell>
-                      <TableCell>{user.total_trades}</TableCell>
                       <TableCell>
-                        <Badge variant={user.is_verified ? "default" : "secondary"}>
-                          {user.is_verified ? 'Verified' : 'Unverified'}
-                        </Badge>
+                        <span className="text-xs text-muted-foreground max-w-[150px] truncate block">
+                          {truncateUserAgent(user.user_agent)}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {new Date(user.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <div className="flex space-x-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedUser(user)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[80vh]">
-                              <DialogHeader>
-                                <DialogTitle>User Details</DialogTitle>
-                                <DialogDescription>
-                                  Complete information for {user.email}
-                                </DialogDescription>
-                              </DialogHeader>
-                              <ScrollArea className="max-h-[60vh] pr-4">
-                                <div className="space-y-6">
-                                  {/* Personal Information */}
-                                  <div>
-                                    <h4 className="text-sm font-semibold mb-3 text-primary">Personal Information</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                      <DetailRow label="Email" value={user.email} />
-                                      <DetailRow label="First Name" value={user.first_name} />
-                                      <DetailRow label="Last Name" value={user.last_name} />
-                                      <DetailRow label="Username" value={user.username} />
-                                      <DetailRow label="Phone" value={user.phone} />
-                                      <DetailRow label="Date of Birth" value={user.date_of_birth ? new Date(user.date_of_birth).toLocaleDateString() : null} />
-                                    </div>
-                                  </div>
-                                  
-                                  <Separator />
-                                  
-                                  {/* Location */}
-                                  <div>
-                                    <h4 className="text-sm font-semibold mb-3 text-primary">Location</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                      <DetailRow label="Address" value={user.address} />
-                                      <DetailRow label="City" value={user.city} />
-                                      <DetailRow label="Country" value={user.country} />
-                                      <DetailRow label="Postal Code" value={user.postal_code} />
-                                    </div>
-                                  </div>
-                                  
-                                  <Separator />
-                                  
-                                  {/* Account */}
-                                  <div>
-                                    <h4 className="text-sm font-semibold mb-3 text-primary">Account</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                      <DetailRow label="Balance" value={<span className="font-mono">${user.balance?.toFixed(2) || '0.00'}</span>} />
-                                      <DetailRow label="Total Trades" value={user.total_trades} />
-                                      <DetailRow label="Status" value={
-                                        <Badge variant={user.is_verified ? "default" : "secondary"}>
-                                          {user.is_verified ? 'Verified' : 'Unverified'}
-                                        </Badge>
-                                      } />
-                                      <DetailRow label="Role" value={user.role} />
-                                      <DetailRow label="Credit Score" value={user.credit_score} />
-                                    </div>
-                                  </div>
-                                  
-                                  <Separator />
-                                  
-                                  {/* Technical */}
-                                  <div>
-                                    <h4 className="text-sm font-semibold mb-3 text-primary">Technical Information</h4>
-                                    <div className="grid grid-cols-1 gap-4">
-                                      <DetailRow label="Wallet Address" value={
-                                        user.wallet_address ? (
-                                          <span className="font-mono text-xs break-all">{user.wallet_address}</span>
-                                        ) : null
-                                      } />
-                                      <DetailRow label="IP Address" value={
-                                        user.ip_address ? (
-                                          <span className="font-mono">{user.ip_address}</span>
-                                        ) : null
-                                      } />
-                                      <DetailRow label="User Agent" value={
-                                        user.user_agent ? (
-                                          <span className="text-xs break-all">{user.user_agent}</span>
-                                        ) : null
-                                      } />
-                                    </div>
-                                  </div>
-                                  
-                                  <Separator />
-                                  
-                                  {/* Timestamps */}
-                                  <div>
-                                    <h4 className="text-sm font-semibold mb-3 text-primary">Timestamps</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <DetailRow label="Joined" value={new Date(user.created_at).toLocaleString()} />
-                                      <DetailRow label="Last Updated" value={new Date(user.updated_at).toLocaleString()} />
-                                    </div>
-                                  </div>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedUser(user)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>User Details</DialogTitle>
+                              <DialogDescription>
+                                Complete information for {user.email}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-6">
+                              <div>
+                                <h4 className="text-sm font-semibold mb-3 text-primary">Account Information</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <DetailRow label="Email" value={user.email} />
+                                  <DetailRow label="Username" value={user.username} />
+                                  <DetailRow label="Credit Score" value={user.credit_score} />
+                                  <DetailRow label="Joined" value={new Date(user.created_at).toLocaleString()} />
                                 </div>
-                              </ScrollArea>
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleUserVerification(user.user_id, user.is_verified || false)}
-                          >
-                            {user.is_verified ? (
-                              <UserX className="h-4 w-4" />
-                            ) : (
-                              <UserCheck className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
+                              </div>
+                              
+                              <Separator />
+                              
+                              <div>
+                                <h4 className="text-sm font-semibold mb-3 text-primary">Wallet & Location</h4>
+                                <div className="grid grid-cols-1 gap-4">
+                                  <DetailRow label="Wallet Address" value={
+                                    user.wallet_address ? (
+                                      <span className="font-mono text-xs break-all">{user.wallet_address}</span>
+                                    ) : null
+                                  } />
+                                  <DetailRow label="IP Address" value={
+                                    user.ip_address ? (
+                                      <span className="font-mono">{user.ip_address}</span>
+                                    ) : null
+                                  } />
+                                  <DetailRow label="Country" value={user.ip_country} />
+                                </div>
+                              </div>
+                              
+                              <Separator />
+                              
+                              <div>
+                                <h4 className="text-sm font-semibold mb-3 text-primary">Technical</h4>
+                                <DetailRow label="User Agent" value={
+                                  user.user_agent ? (
+                                    <span className="text-xs break-all">{user.user_agent}</span>
+                                  ) : null
+                                } />
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       </TableCell>
                     </TableRow>
                   ))
