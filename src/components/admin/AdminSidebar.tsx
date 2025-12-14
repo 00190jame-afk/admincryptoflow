@@ -16,9 +16,7 @@ import {
   LayoutDashboard,
   Users,
   TrendingUp,
-  Gift,
   DollarSign,
-  Settings,
   Shield,
   MessageSquare,
   Mail,
@@ -40,9 +38,6 @@ const superAdminItems = [
   { title: 'Admin Management', url: '/admin/admins', icon: Shield },
 ];
 
-const reportItems = [
-  { title: 'Settings', url: '/admin/settings', icon: Settings },
-];
 
 export function AdminSidebar() {
   const { state } = useSidebar();
@@ -104,23 +99,6 @@ export function AdminSidebar() {
           </SidebarGroup>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Reports & Settings</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {reportItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={getNavCls(item.url)}>
-                      <item.icon className="mr-2 h-4 w-4" />
-                      {state !== "collapsed" && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );

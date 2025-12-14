@@ -719,32 +719,17 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: string
       }
-      generate_invite_code: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      generate_recharge_code: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      generate_invite_code: { Args: never; Returns: string }
+      generate_recharge_code: { Args: never; Returns: string }
       get_admin_assigned_users: {
         Args: { p_admin_user_id: string }
         Returns: {
           user_id: string
         }[]
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_any_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_super_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
+      is_any_admin: { Args: never; Returns: boolean }
+      is_super_admin: { Args: never; Returns: boolean }
       log_admin_action: {
         Args: {
           p_action_type: string
@@ -776,31 +761,31 @@ export type Database = {
         Args: { p_action: string; p_amount: number; p_user_id: string }
         Returns: undefined
       }
-      update_user_balance: {
-        Args:
-          | {
+      update_user_balance:
+        | {
+            Args: {
+              p_amount: number
+              p_description?: string
+              p_transaction_type?: string
+              p_user_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
               p_amount: number
               p_description?: string
               p_trade_id?: string
               p_transaction_type?: string
               p_user_id: string
             }
-          | {
-              p_amount: number
-              p_description?: string
-              p_transaction_type?: string
-              p_user_id: string
-            }
-        Returns: undefined
-      }
+            Returns: undefined
+          }
       use_invite_code: {
         Args: { p_code: string; p_user_id: string }
         Returns: boolean
       }
-      validate_invite_code: {
-        Args: { p_code: string }
-        Returns: boolean
-      }
+      validate_invite_code: { Args: { p_code: string }; Returns: boolean }
       verify_code: {
         Args: { p_code: string; p_identifier: string; p_type: string }
         Returns: boolean
