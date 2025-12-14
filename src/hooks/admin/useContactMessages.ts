@@ -59,9 +59,15 @@ export const useContactMessages = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const { data: messages = [], isLoading, error } = useQuery({
+const { data: messages = [], isLoading, error } = useQuery({
     queryKey: ['contact-messages', assignedEmails, isSuperAdmin],
-    queryFn: () => fetchContactMessages(assignedEmails, isSuperAdmin),
+    queryFn: () => {
+      // Regular admin with no assigned users should see empty array
+      if (!isSuperAdmin && assignedEmails.length === 0) {
+        return [];
+      }
+      return fetchContactMessages(assignedEmails, isSuperAdmin);
+    },
     enabled: isReady && !roleLoading,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Refetch every minute

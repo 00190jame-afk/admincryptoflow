@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface RechargeCode {
   id: string;
@@ -38,72 +39,82 @@ const RechargeCodeManagement = () => {
   const [newCodeIds, setNewCodeIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { markAsRead } = useNotifications();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
   useEffect(() => {
-    // Add small delay to ensure auth is ready
-    const timeoutId = setTimeout(() => {
-      fetchRechargeCodes();
-      fetchProfiles();
-      
-      // Set up real-time subscription for new codes
-      const codesChannel = supabase
-        .channel('recharge-codes-realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'recharge_codes'
-          },
-          (payload) => {
-            // New recharge code created
-            setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
-            // Mark this code as new for highlighting
-            setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
-            // Auto-remove the highlight after 30 seconds
-            setTimeout(() => {
-              setNewCodeIds((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(payload.new.id);
-                return newSet;
-              });
-            }, 30000);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'recharge_codes'
-          },
-          (payload) => {
-            // Recharge code updated
-            setCodes((prevCodes) => 
-              prevCodes.map((code) => 
-                code.id === payload.new.id ? payload.new as RechargeCode : code
-              )
-            );
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(codesChannel);
-      };
-    }, 100);
+    if (adminLoading) return;
+    
+    fetchRechargeCodes();
+    fetchProfiles();
+    
+    // Set up real-time subscription for new codes
+    const codesChannel = supabase
+      .channel('recharge-codes-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload) => {
+          // New recharge code created
+          setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
+          // Mark this code as new for highlighting
+          setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
+          // Auto-remove the highlight after 30 seconds
+          setTimeout(() => {
+            setNewCodeIds((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(payload.new.id);
+              return newSet;
+            });
+          }, 30000);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload) => {
+          // Recharge code updated
+          setCodes((prevCodes) => 
+            prevCodes.map((code) => 
+              code.id === payload.new.id ? payload.new as RechargeCode : code
+            )
+          );
+        }
+      )
+      .subscribe();
 
     return () => {
-      clearTimeout(timeoutId);
+      supabase.removeChannel(codesChannel);
     };
-  }, [markAsRead]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchRechargeCodes = async (retryCount = 0) => {
     try {
-      const { data, error } = await supabase
+      // Regular admin with no assigned users should see empty array
+      if (!isSuperAdmin && assignedUserIds.length === 0) {
+        setCodes([]);
+        setLoading(false);
+        return;
+      }
+
+      let query = supabase
         .from('recharge_codes')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Filter for regular admins to only show codes redeemed by their assigned users
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         // Don't log auth-related errors as real errors

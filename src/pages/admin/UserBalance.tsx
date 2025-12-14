@@ -97,6 +97,13 @@ const UserBalance = () => {
 
   const fetchUserBalances = async () => {
     try {
+      // Regular admin with no assigned users should see empty array
+      if (!isSuperAdmin && assignedUserIds.length === 0) {
+        setBalances([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('user_balances')
         .select('*')
