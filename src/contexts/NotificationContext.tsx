@@ -6,8 +6,10 @@ import { useToast } from '@/hooks/use-toast';
 interface NotificationCounts {
   trades: number;
   withdrawals: number;
-  contactMessages: number;
-  userMessages: number;
+  messages: number;
+  users: number;
+  rechargeCodes: number;
+  balanceChanges: number;
 }
 
 interface NotificationContextType {
@@ -25,8 +27,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [counts, setCounts] = useState<NotificationCounts>({
     trades: 0,
     withdrawals: 0,
-    contactMessages: 0,
-    userMessages: 0,
+    messages: 0,
+    users: 0,
+    rechargeCodes: 0,
+    balanceChanges: 0,
   });
   const [isEnabled, setIsEnabled] = useState(notificationAudio.getEnabled());
   const [volume, setVolume] = useState(notificationAudio.getVolume());
@@ -75,9 +79,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       )
       .subscribe();
 
-    // Subscribe to new contact messages
-    const contactChannel = supabase
-      .channel('contact-changes')
+    // Subscribe to new contact messages (inbox)
+    const messagesChannel = supabase
+      .channel('contact-messages-changes')
       .on(
         'postgres_changes',
         {
@@ -86,32 +90,77 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           table: 'contact_messages'
         },
         (payload) => {
-          setCounts(prev => ({ ...prev, contactMessages: prev.contactMessages + 1 }));
+          setCounts(prev => ({ ...prev, messages: prev.messages + 1 }));
           notificationAudio.play();
           toast({
-            title: "New Contact Message",
-            description: "A new contact message has been received",
+            title: "New Message",
+            description: "A new message has been received",
           });
         }
       )
       .subscribe();
 
-    // Subscribe to new user messages
-    const messagesChannel = supabase
-      .channel('messages-changes')
+    // Subscribe to new user registrations
+    const usersChannel = supabase
+      .channel('users-changes')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'messages'
+          table: 'profiles'
         },
         (payload) => {
-          setCounts(prev => ({ ...prev, userMessages: prev.userMessages + 1 }));
+          setCounts(prev => ({ ...prev, users: prev.users + 1 }));
           notificationAudio.play();
           toast({
-            title: "New User Message",
-            description: "A new user message has been received",
+            title: "New User Registered",
+            description: "A new user has joined the platform",
+          });
+        }
+      )
+      .subscribe();
+
+    // Subscribe to recharge code redemptions
+    const rechargeChannel = supabase
+      .channel('recharge-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload: any) => {
+          // Only notify when a code is redeemed
+          if (payload.new?.status === 'redeemed' && payload.old?.status !== 'redeemed') {
+            setCounts(prev => ({ ...prev, rechargeCodes: prev.rechargeCodes + 1 }));
+            notificationAudio.play();
+            toast({
+              title: "Recharge Code Redeemed",
+              description: `Code redeemed for $${payload.new?.amount || 0}`,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to user balance changes
+    const balanceChannel = supabase
+      .channel('balance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_balances'
+        },
+        (payload) => {
+          setCounts(prev => ({ ...prev, balanceChanges: prev.balanceChanges + 1 }));
+          notificationAudio.play();
+          toast({
+            title: "User Balance Updated",
+            description: "A user's balance has been updated",
           });
         }
       )
@@ -120,8 +169,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       supabase.removeChannel(tradesChannel);
       supabase.removeChannel(withdrawalsChannel);
-      supabase.removeChannel(contactChannel);
       supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(usersChannel);
+      supabase.removeChannel(rechargeChannel);
+      supabase.removeChannel(balanceChannel);
     };
   }, [toast]);
 
