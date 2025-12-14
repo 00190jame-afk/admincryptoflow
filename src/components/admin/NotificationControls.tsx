@@ -8,6 +8,15 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { Separator } from '@/components/ui/separator';
 import { notificationAudio } from '@/lib/NotificationAudio';
 
+const notificationItems = [
+  { key: 'trades' as const, label: 'New Trades' },
+  { key: 'withdrawals' as const, label: 'Withdrawals' },
+  { key: 'messages' as const, label: 'Messages' },
+  { key: 'users' as const, label: 'New Users' },
+  { key: 'rechargeCodes' as const, label: 'Recharge Codes' },
+  { key: 'balanceChanges' as const, label: 'Balance Changes' },
+];
+
 export const NotificationControls = () => {
   const { counts, isEnabled, volume, setEnabled, setVolume, markAsRead } = useNotifications();
 
@@ -46,73 +55,24 @@ export const NotificationControls = () => {
           <Separator />
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">New Trades</span>
-              <div className="flex items-center gap-2">
-                {counts.trades > 0 && (
-                  <Badge variant="secondary">{counts.trades}</Badge>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => markAsRead('trades')}
-                  className="text-xs h-6 px-2"
-                >
-                  Clear
-                </Button>
+            {notificationItems.map((item) => (
+              <div key={item.key} className="flex items-center justify-between">
+                <span className="text-sm">{item.label}</span>
+                <div className="flex items-center gap-2">
+                  {counts[item.key] > 0 && (
+                    <Badge variant="secondary">{counts[item.key]}</Badge>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => markAsRead(item.key)}
+                    className="text-xs h-6 px-2"
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Withdrawals</span>
-              <div className="flex items-center gap-2">
-                {counts.withdrawals > 0 && (
-                  <Badge variant="secondary">{counts.withdrawals}</Badge>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => markAsRead('withdrawals')}
-                  className="text-xs h-6 px-2"
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Contact Messages</span>
-              <div className="flex items-center gap-2">
-                {counts.contactMessages > 0 && (
-                  <Badge variant="secondary">{counts.contactMessages}</Badge>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => markAsRead('contactMessages')}
-                  className="text-xs h-6 px-2"
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm">User Messages</span>
-              <div className="flex items-center gap-2">
-                {counts.userMessages > 0 && (
-                  <Badge variant="secondary">{counts.userMessages}</Badge>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => markAsRead('userMessages')}
-                  className="text-xs h-6 px-2"
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
+            ))}
           </div>
 
           {isEnabled && (
