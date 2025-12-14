@@ -13,6 +13,7 @@ import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import TradeManagement from "./pages/admin/TradeManagement";
 import AdminManagement from "./pages/admin/AdminManagement";
+import TradeRules from "./pages/admin/TradeRules";
 import UserRegister from "./pages/UserRegister";
 
 import Messages from "./pages/admin/Messages";
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="trades" element={<TradeManagement />} />
               <Route path="admins" element={<AdminManagement />} />
+              <Route path="rules" element={<TradeRules />} />
               <Route path="messages" element={<Messages />} />
               <Route path="recharge" element={<RechargeCodeManagement />} />
               <Route path="balance" element={<UserBalance />} />
