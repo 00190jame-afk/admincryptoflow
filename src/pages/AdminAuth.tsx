@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield } from 'lucide-react';
+import { Loader2, Shield, Eye, EyeOff } from 'lucide-react';
 
 const AdminAuth = () => {
   const { user, loading, signIn, signUp } = useAuth();
@@ -18,6 +18,8 @@ const AdminAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   if (loading) {
     return (
@@ -88,7 +90,7 @@ const AdminAuth = () => {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="admin@example.com"
+                    placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -96,13 +98,22 @@ const AdminAuth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 {error && (
                   <Alert variant="destructive">
@@ -123,7 +134,7 @@ const AdminAuth = () => {
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="Enter your full name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
@@ -134,7 +145,7 @@ const AdminAuth = () => {
                   <Input
                     id="signupEmail"
                     type="email"
-                    placeholder="admin@example.com"
+                    placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -142,13 +153,22 @@ const AdminAuth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signupPassword">Password</Label>
-                  <Input
-                    id="signupPassword"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signupPassword"
+                      type={showSignupPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="inviteCode">Admin Invite Code</Label>
@@ -178,17 +198,6 @@ const AdminAuth = () => {
               </form>
             </TabsContent>
           </Tabs>
-          
-          <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground mb-2">
-              Not an admin? Looking to register as a user?
-            </p>
-            <Link to="/register">
-              <Button variant="outline" size="sm">
-                User Registration
-              </Button>
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>
