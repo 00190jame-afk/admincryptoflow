@@ -10,8 +10,8 @@ import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Sparkles
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 interface Trade {
   id: string;
@@ -33,8 +33,8 @@ interface Trade {
 
 const TradeManagement = () => {
   const { toast } = useToast();
-  const { isSuperAdmin } = useAuth();
   const { markAsRead } = useNotifications();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,6 +44,8 @@ const TradeManagement = () => {
   const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (adminLoading) return;
+    
     fetchTrades();
     
     // Mark trades as read when component loads
@@ -97,10 +99,17 @@ const TradeManagement = () => {
     return () => {
       supabase.removeChannel(tradesChannel);
     };
-  }, [markAsRead]);
+  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchTrades = async () => {
     try {
+      // Regular admin with no assigned users should see empty array
+      if (!isSuperAdmin && assignedUserIds.length === 0) {
+        setTrades([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('trades')
         .select(`
@@ -122,21 +131,8 @@ const TradeManagement = () => {
         `);
 
       // If not super admin, filter to only assigned users
-      if (!isSuperAdmin) {
-        const { data: assignedUsers } = await supabase
-          .rpc('get_admin_assigned_users', { 
-            p_admin_user_id: (await supabase.auth.getUser()).data.user?.id 
-          });
-        
-        if (assignedUsers && assignedUsers.length > 0) {
-          const userIds = assignedUsers.map((u: any) => u.user_id);
-          query = query.in('user_id', userIds);
-        } else {
-          // If no assigned users, return empty array
-          setTrades([]);
-          setLoading(false);
-          return;
-        }
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
       }
 
       const { data, error } = await query
