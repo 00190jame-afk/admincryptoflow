@@ -353,22 +353,18 @@ export type Database = {
       }
       profiles: {
         Row: {
-          address: string | null
           avatar_url: string | null
-          city: string | null
-          country: string | null
           created_at: string
           credit_score: number | null
-          date_of_birth: string | null
           email: string | null
           first_name: string | null
           full_name: string | null
           id: string
           ip_address: string | null
+          ip_country: string | null
           is_verified: boolean | null
           last_name: string | null
           phone: string | null
-          postal_code: string | null
           role: string | null
           updated_at: string
           user_agent: string | null
@@ -377,22 +373,18 @@ export type Database = {
           wallet_address: string | null
         }
         Insert: {
-          address?: string | null
           avatar_url?: string | null
-          city?: string | null
-          country?: string | null
           created_at?: string
           credit_score?: number | null
-          date_of_birth?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
           id?: string
           ip_address?: string | null
+          ip_country?: string | null
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
-          postal_code?: string | null
           role?: string | null
           updated_at?: string
           user_agent?: string | null
@@ -401,22 +393,18 @@ export type Database = {
           wallet_address?: string | null
         }
         Update: {
-          address?: string | null
           avatar_url?: string | null
-          city?: string | null
-          country?: string | null
           created_at?: string
           credit_score?: number | null
-          date_of_birth?: string | null
           email?: string | null
           first_name?: string | null
           full_name?: string | null
           id?: string
           ip_address?: string | null
+          ip_country?: string | null
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
-          postal_code?: string | null
           role?: string | null
           updated_at?: string
           user_agent?: string | null
