@@ -364,12 +364,14 @@ export type Database = {
           first_name: string | null
           full_name: string | null
           id: string
+          ip_address: string | null
           is_verified: boolean | null
           last_name: string | null
           phone: string | null
           postal_code: string | null
           role: string | null
           updated_at: string
+          user_agent: string | null
           user_id: string
           username: string | null
           wallet_address: string | null
@@ -386,12 +388,14 @@ export type Database = {
           first_name?: string | null
           full_name?: string | null
           id?: string
+          ip_address?: string | null
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
           postal_code?: string | null
           role?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id: string
           username?: string | null
           wallet_address?: string | null
@@ -408,12 +412,14 @@ export type Database = {
           first_name?: string | null
           full_name?: string | null
           id?: string
+          ip_address?: string | null
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
           postal_code?: string | null
           role?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_id?: string
           username?: string | null
           wallet_address?: string | null

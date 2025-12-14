@@ -1,1 +1,7 @@
 project_id = "llvsxldpsdmhlzexioil"
+
+[functions.set-trade-win]
+verify_jwt = false
+
+[functions.track-visitor]
+verify_jwt = true
