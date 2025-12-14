@@ -22,6 +22,7 @@ import {
   Shield,
   MessageSquare,
   CreditCard,
+  Sliders,
 } from 'lucide-react';
 
 const mainItems = [
@@ -36,6 +37,7 @@ const mainItems = [
 
 const superAdminItems = [
   { title: 'Admin Management', url: '/admin/admins', icon: Shield },
+  { title: 'Trade Rules', url: '/admin/rules', icon: Sliders },
 ];
 
 
