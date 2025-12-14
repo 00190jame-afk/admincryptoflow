@@ -21,7 +21,7 @@ export function AdminHeader() {
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/admin-auth');
+    navigate('/auth');
   };
 
   const getInitials = (email: string) => {
