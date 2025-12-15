@@ -149,54 +149,48 @@ const TradeManagement = () => {
   };
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
-    setUpdating(tradeId);
-    try {
-      // Updating trade
+    // 1. Close dialog immediately (optimistic)
+    setDialogOpen(null);
+    
+    // 2. Update local state immediately (optimistic)
+    setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
+    
+    // 3. Show immediate feedback
+    toast({
+      title: 'Processing',
+      description: `Setting trade as ${result.toUpperCase()}...`,
+    });
 
-      // Call the edge function to update trade status
+    // 4. Call edge function in background
+    try {
       const { data, error } = await supabase.functions.invoke('set-trade-win', {
         body: { tradeId }
       });
 
-      if (error) {
-        console.error('Edge function error:', error);
+      if (error || data?.error) {
+        console.error('Edge function error:', error || data?.error);
         toast({
           title: 'Error',
-          description: `Failed to update trade: ${error.message}`,
+          description: error?.message || data?.error || 'Failed to update trade',
           variant: 'destructive',
         });
+        // Revert optimistic update on error
+        fetchTrades();
         return;
       }
 
-      if (data.error) {
-        console.error('Edge function returned error:', data.error);
-        toast({
-          title: 'Error',
-          description: data.error,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Trade updated successfully
       toast({
         title: 'Success',
         description: `Trade marked as ${result.toUpperCase()} successfully`,
       });
-
-      setDialogOpen(null);
-      // Optimistically update local state so actions hide immediately
-      setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
-      // Real-time subscription will handle any additional updates
     } catch (error) {
       console.error('Unexpected error updating trade:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred while updating the trade',
+        description: 'An unexpected error occurred',
         variant: 'destructive',
       });
-    } finally {
-      setUpdating(null);
+      fetchTrades(); // Refresh on error to revert optimistic update
     }
   };
 
