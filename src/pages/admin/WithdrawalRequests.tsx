@@ -12,6 +12,7 @@ import { Clock, CheckCircle, XCircle, CreditCard, AlertTriangle, Sparkles } from
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { useTranslation } from 'react-i18next';
 
 interface WithdrawRequest {
   id: string;
@@ -33,6 +34,7 @@ interface UserProfile {
 }
 
 const WithdrawalRequests = () => {
+  const { t } = useTranslation();
   const [requests, setRequests] = useState<WithdrawRequest[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,8 +126,8 @@ const WithdrawalRequests = () => {
     } catch (error) {
       console.error('Error fetching withdrawal requests:', error);
       toast({
-        title: "Error",
-        description: "Failed to load withdrawal requests",
+        title: t('common.error'),
+        description: t('withdrawals.failedLoad'),
         variant: "destructive",
       });
     } finally {
@@ -181,14 +183,14 @@ const WithdrawalRequests = () => {
       setAdminNotes('');
 
       toast({
-        title: "Success",
-        description: `Withdrawal request ${action} successfully`,
+        title: t('common.success'),
+        description: action === 'approved' ? t('withdrawals.withdrawalApproved') : t('withdrawals.withdrawalRejected'),
       });
     } catch (error) {
       console.error('Error processing withdrawal request:', error);
       toast({
-        title: "Error",
-        description: "Failed to process withdrawal request",
+        title: t('common.error'),
+        description: t('withdrawals.failedProcess'),
         variant: "destructive",
       });
     }
@@ -210,11 +212,11 @@ const WithdrawalRequests = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Pending</Badge>;
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">{t('trades.pending')}</Badge>;
       case 'approved':
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">Approved</Badge>;
+        return <Badge variant="secondary" className="bg-green-100 text-green-800">{t('withdrawals.approved')}</Badge>;
       case 'rejected':
-        return <Badge variant="secondary" className="bg-red-100 text-red-800">Rejected</Badge>;
+        return <Badge variant="secondary" className="bg-red-100 text-red-800">{t('withdrawals.rejected')}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -238,34 +240,34 @@ const WithdrawalRequests = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Withdrawal Requests</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('withdrawals.title')}</h1>
         <p className="text-muted-foreground">
-          Review and process user withdrawal requests
+          {t('withdrawals.description')}
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Withdrawals</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('withdrawals.pendingWithdrawals')}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingRequests.length}</div>
             <p className="text-xs text-muted-foreground">
-              Requests awaiting review
+              {t('withdrawals.requestsAwaiting')}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('withdrawals.pendingAmount')}</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${pendingAmount.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              Total pending withdrawal amount
+              {t('withdrawals.totalPendingAmount')}
             </p>
           </CardContent>
         </Card>
@@ -273,34 +275,34 @@ const WithdrawalRequests = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Withdrawal Requests</CardTitle>
+          <CardTitle>{t('withdrawals.allRequests')}</CardTitle>
           <CardDescription>
-            Review and manage all withdrawal requests
+            {t('withdrawals.reviewManage')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('common.date')}</TableHead>
+                <TableHead>{t('common.user')}</TableHead>
+                <TableHead>{t('common.amount')}</TableHead>
+                <TableHead>{t('common.status')}</TableHead>
+                <TableHead>{t('common.code')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center">
-                    Loading withdrawal requests...
+                    {t('withdrawals.loadingRequests')}
                   </TableCell>
                 </TableRow>
               ) : requests.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center">
-                    No withdrawal requests found
+                    {t('withdrawals.noRequests')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -350,42 +352,42 @@ const WithdrawalRequests = () => {
                           <>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => setSelectedRequest(request)}
                                 >
-                                  Review
+                                  {t('withdrawals.review')}
                                 </Button>
                               </DialogTrigger>
                               <DialogContent>
                                 <DialogHeader>
-                                  <DialogTitle>Review Withdrawal Request</DialogTitle>
+                                  <DialogTitle>{t('withdrawals.reviewRequest')}</DialogTitle>
                                   <DialogDescription>
-                                    Request ID: {request.id}
+                                    {t('withdrawals.requestId')}: {request.id}
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                      <label className="text-sm font-medium">Amount</label>
+                                      <label className="text-sm font-medium">{t('common.amount')}</label>
                                       <p className="text-lg font-bold">${request.amount.toFixed(2)}</p>
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium">User ID</label>
+                                      <label className="text-sm font-medium">{t('withdrawals.userId')}</label>
                                       <p className="text-sm font-mono">{request.user_id}</p>
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium">Requested At</label>
+                                    <label className="text-sm font-medium">{t('withdrawals.requestedAt')}</label>
                                     <p>{new Date(request.created_at).toLocaleString()}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium mb-2 block">Admin Notes</label>
+                                    <label className="text-sm font-medium mb-2 block">{t('withdrawals.adminNotes')}</label>
                                     <Textarea
                                       value={adminNotes}
                                       onChange={(e) => setAdminNotes(e.target.value)}
-                                      placeholder="Add notes about this request..."
+                                      placeholder={t('withdrawals.addNotes')}
                                       rows={3}
                                     />
                                   </div>
@@ -393,22 +395,22 @@ const WithdrawalRequests = () => {
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
                                         <Button className="flex-1">
-                                          Approve
+                                          {t('withdrawals.approve')}
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
-                                          <AlertDialogTitle>Approve Withdrawal</AlertDialogTitle>
+                                          <AlertDialogTitle>{t('withdrawals.approveWithdrawal')}</AlertDialogTitle>
                                           <AlertDialogDescription>
-                                            Are you sure you want to approve this withdrawal request for ${request.amount.toFixed(2)}?
+                                            {t('withdrawals.approveConfirm')} ${request.amount.toFixed(2)}?
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                                           <AlertDialogAction 
                                             onClick={() => processWithdrawRequest(request.id, 'approved', adminNotes)}
                                           >
-                                            Approve
+                                            {t('withdrawals.approve')}
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>
@@ -416,22 +418,22 @@ const WithdrawalRequests = () => {
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
                                         <Button variant="destructive" className="flex-1">
-                                          Reject
+                                          {t('withdrawals.reject')}
                                         </Button>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
-                                          <AlertDialogTitle>Reject Withdrawal</AlertDialogTitle>
+                                          <AlertDialogTitle>{t('withdrawals.rejectWithdrawal')}</AlertDialogTitle>
                                           <AlertDialogDescription>
-                                            Are you sure you want to reject this withdrawal request? This action cannot be undone.
+                                            {t('withdrawals.rejectConfirm')}
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                                           <AlertDialogAction 
                                             onClick={() => processWithdrawRequest(request.id, 'rejected', adminNotes)}
                                           >
-                                            Reject
+                                            {t('withdrawals.reject')}
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>

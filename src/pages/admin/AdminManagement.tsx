@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Shield, Users, Copy, Check } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 interface AdminProfile {
   id: string;
@@ -48,6 +49,7 @@ interface AdminInviteCode {
 }
 
 const AdminManagement = () => {
+  const { t } = useTranslation();
   const { isSuperAdmin, user } = useAuth();
   const [admins, setAdmins] = useState<AdminProfile[]>([]);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
@@ -111,8 +113,8 @@ const AdminManagement = () => {
     } catch (error) {
       console.error('Error fetching admins:', error);
       toast({
-        title: "Error",
-        description: "Failed to fetch admin profiles",
+        title: t('common.error'),
+        description: t('admin.failedCreateAdmin'),
         variant: "destructive",
       });
     }
@@ -130,8 +132,8 @@ const AdminManagement = () => {
     } catch (error) {
       console.error('Error fetching invite codes:', error);
       toast({
-        title: "Error",
-        description: "Failed to fetch invite codes",
+        title: t('common.error'),
+        description: t('admin.failedCreateUser'),
         variant: "destructive",
       });
     } finally {
@@ -178,16 +180,16 @@ const AdminManagement = () => {
       if (error) throw error;
 
       toast({
-        title: "Admin invite code created",
-        description: "New admin invite code has been generated successfully.",
+        title: t('common.success'),
+        description: t('admin.adminCodeCreated'),
       });
 
       fetchAdminInviteCodes();
     } catch (error) {
       console.error('Error creating admin invite code:', error);
       toast({
-        title: "Error",
-        description: "Failed to create admin invite code. Please try again.",
+        title: t('common.error'),
+        description: t('admin.failedCreateAdmin'),
         variant: "destructive",
       });
     } finally {
@@ -219,8 +221,8 @@ const AdminManagement = () => {
       if (error) throw error;
 
       toast({
-        title: "Success",
-        description: `User invite code ${codeResult} created successfully!`,
+        title: t('common.success'),
+        description: t('admin.userCodeCreated'),
       });
 
       // Refresh data
@@ -228,8 +230,8 @@ const AdminManagement = () => {
     } catch (error) {
       console.error('Error creating user invite code:', error);
       toast({
-        title: "Error",
-        description: "Failed to create user invite code",
+        title: t('common.error'),
+        description: t('admin.failedCreateUser'),
         variant: "destructive",
       });
     }
@@ -241,8 +243,8 @@ const AdminManagement = () => {
       setCopiedCode(code);
       setTimeout(() => setCopiedCode(null), 2000);
       toast({
-        title: "Copied!",
-        description: "Invite code copied to clipboard.",
+        title: t('recharge.copy'),
+        description: t('recharge.copied'),
       });
     } catch (error) {
       console.error('Failed to copy:', error);
@@ -260,14 +262,14 @@ const AdminManagement = () => {
       
       fetchAdmins();
       toast({
-        title: "Admin status updated",
-        description: `Admin has been ${!currentStatus ? 'activated' : 'deactivated'}.`,
+        title: t('common.success'),
+        description: t('admin.statusUpdated'),
       });
     } catch (error) {
       console.error('Error updating admin status:', error);
       toast({
-        title: "Error",
-        description: "Failed to update admin status.",
+        title: t('common.error'),
+        description: t('admin.failedUpdateStatus'),
         variant: "destructive",
       });
     }
@@ -279,9 +281,9 @@ const AdminManagement = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Invite Code</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t('admin.yourInviteCode')}</h1>
           <p className="text-muted-foreground">
-            Your personal invite code for user registration
+            {t('admin.shareCode')}
           </p>
         </div>
 
@@ -289,20 +291,20 @@ const AdminManagement = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="h-5 w-5" />
-              <span>User Registration Code</span>
+              <span>{t('admin.userInviteCode')}</span>
             </CardTitle>
             <CardDescription>
-              Share this code with users to allow them to register under your administration
+              {t('admin.shareCode')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-4">Loading...</div>
+              <div className="text-center py-4">{t('common.loading')}</div>
             ) : myCode ? (
               <div className="space-y-3">
                 <Alert>
                   <AlertDescription>
-                    Share this code with users. When they register using this code, they will be linked to your admin account and you'll be able to see their data in User Management, Messages, and Withdrawal Requests.
+                    {t('admin.shareCode')}
                   </AlertDescription>
                 </Alert>
                 <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
@@ -334,8 +336,7 @@ const AdminManagement = () => {
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No invite code assigned</p>
-                <p className="text-sm">Contact a super admin to get an invite code assigned to your account.</p>
+                <p className="text-lg font-medium">{t('admin.noAdmins')}</p>
               </div>
             )}
           </CardContent>
@@ -347,9 +348,9 @@ const AdminManagement = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Admin Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('admin.title')}</h1>
         <p className="text-muted-foreground">
-          Manage administrators and their invite codes
+          {t('admin.description')}
         </p>
       </div>
 
@@ -358,36 +359,36 @@ const AdminManagement = () => {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Shield className="h-5 w-5" />
-            <span>Administrator Profiles</span>
+            <span>{t('admin.allAdmins')}</span>
           </CardTitle>
           <CardDescription>
-            All registered administrators and their user invite codes
+            {t('admin.manageAdmins')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>User Invite Code</TableHead>
+                <TableHead>{t('admin.name')}</TableHead>
+                <TableHead>{t('common.email')}</TableHead>
+                <TableHead>{t('admin.role')}</TableHead>
+                <TableHead>{t('common.status')}</TableHead>
+                <TableHead>{t('admin.userInviteCode')}</TableHead>
                 <TableHead>Code Usage</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center">
-                    Loading...
+                    {t('admin.loadingAdmins')}
                   </TableCell>
                 </TableRow>
               ) : admins.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center">
-                    No administrators found
+                    {t('admin.noAdmins')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -411,12 +412,12 @@ const AdminManagement = () => {
                       <TableCell>{admin.email}</TableCell>
                       <TableCell>
                         <Badge variant={admin.role === 'super_admin' ? 'default' : 'secondary'}>
-                          {admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                          {admin.role === 'super_admin' ? t('header.superAdmin') : 'Admin'}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={admin.is_active ? 'default' : 'destructive'}>
-                          {admin.is_active ? 'Active' : 'Inactive'}
+                          {admin.is_active ? t('admin.active') : t('admin.inactive')}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -436,14 +437,14 @@ const AdminManagement = () => {
                             size="sm"
                             onClick={() => createUserInviteCode(admin.full_name || admin.email)}
                           >
-                            Create Code
+                            {t('admin.createUserCode')}
                           </Button>
                         )}
                       </TableCell>
                       <TableCell>
                         {adminCode ? (
                           <span className="text-sm text-muted-foreground">
-                            {adminCode.current_uses}/{adminCode.max_uses} used
+                            {adminCode.current_uses}/{adminCode.max_uses}
                           </span>
                         ) : (
                           <span className="text-sm text-muted-foreground">No code</span>
@@ -456,7 +457,7 @@ const AdminManagement = () => {
                             size="sm"
                             onClick={() => toggleAdminStatus(admin.id, admin.is_active)}
                           >
-                            {admin.is_active ? 'Deactivate' : 'Activate'}
+                            {admin.is_active ? t('admin.deactivate') : t('admin.activate')}
                           </Button>
                         )}
                       </TableCell>
@@ -475,25 +476,25 @@ const AdminManagement = () => {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5" />
-              <span>Admin Invite Codes</span>
+              <span>{t('admin.adminInviteCodes')}</span>
             </div>
             <Dialog>
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Admin Code
+                  {t('admin.createAdminCode')}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create Admin Invite Code</DialogTitle>
+                  <DialogTitle>{t('admin.createNewAdminCode')}</DialogTitle>
                   <DialogDescription>
-                    Generate a new invite code for administrator registration
+                    {t('admin.adminCodeDescription')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="role">Admin Role</Label>
+                    <Label htmlFor="role">{t('admin.role')}</Label>
                     <Select value={newInviteRole} onValueChange={setNewInviteRole}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select role" />

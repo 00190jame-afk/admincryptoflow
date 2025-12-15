@@ -14,8 +14,10 @@ import { SkeletonCard, SkeletonTable } from '@/components/ui/skeleton-card';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 const Messages = () => {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInboxMessage, setSelectedInboxMessage] = useState<InboxMessage | null>(null);
   const [selectedOutboxMessage, setSelectedOutboxMessage] = useState<OutboxMessage | null>(null);
@@ -50,10 +52,10 @@ const Messages = () => {
         .eq('id', messageId);
 
       if (error) throw error;
-      toast({ title: "Success", description: "Message marked as read" });
+      toast({ title: t('common.success'), description: t('messages.markedAsRead') });
     } catch (error) {
       console.error('Error marking message as read:', error);
-      toast({ title: "Error", description: "Failed to mark message as read", variant: "destructive" });
+      toast({ title: t('common.error'), description: t('messages.failedMarkRead'), variant: "destructive" });
     }
   };
 
@@ -70,7 +72,7 @@ const Messages = () => {
         .single();
 
       if (!profile) {
-        toast({ title: "Error", description: "User not found for this email", variant: "destructive" });
+        toast({ title: t('common.error'), description: t('messages.userNotFound'), variant: "destructive" });
         return;
       }
 
@@ -94,12 +96,12 @@ const Messages = () => {
 
       if (updateError) throw updateError;
 
-      toast({ title: "Success", description: "Reply sent successfully" });
+      toast({ title: t('common.success'), description: t('messages.replySent') });
       setReplyText('');
       setSelectedInboxMessage(null);
     } catch (error) {
       console.error('Error sending reply:', error);
-      toast({ title: "Error", description: "Failed to send reply", variant: "destructive" });
+      toast({ title: t('common.error'), description: t('messages.failedSendReply'), variant: "destructive" });
     } finally {
       setIsReplying(false);
     }
@@ -120,13 +122,13 @@ const Messages = () => {
 
       if (error) throw error;
 
-      toast({ title: "Success", description: "Message sent successfully" });
+      toast({ title: t('common.success'), description: t('messages.messageSent') });
       setNewMessageText('');
       setNewMessageUserId('');
       setNewMessageOpen(false);
     } catch (error) {
       console.error('Error sending message:', error);
-      toast({ title: "Error", description: "Failed to send message", variant: "destructive" });
+      toast({ title: t('common.error'), description: t('messages.failedSendMessage'), variant: "destructive" });
     } finally {
       setIsSending(false);
     }
@@ -166,8 +168,8 @@ const Messages = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Messages</h1>
-          <p className="text-muted-foreground">Manage inbox and sent messages</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('messages.title')}</h1>
+          <p className="text-muted-foreground">{t('messages.description')}</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <SkeletonCard />
@@ -184,27 +186,27 @@ const Messages = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Messages</h1>
-          <p className="text-muted-foreground">Manage inbox and sent messages</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('messages.title')}</h1>
+          <p className="text-muted-foreground">{t('messages.description')}</p>
         </div>
         <Dialog open={newMessageOpen} onOpenChange={setNewMessageOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              New Message
+              {t('messages.newMessage')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Send New Message</DialogTitle>
-              <DialogDescription>Send a message to a user</DialogDescription>
+              <DialogTitle>{t('messages.sendNewMessage')}</DialogTitle>
+              <DialogDescription>{t('messages.sendToUser')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Select User</label>
+                <label className="text-sm font-medium">{t('messages.selectUser')}</label>
                 <Select value={newMessageUserId} onValueChange={setNewMessageUserId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a user..." />
+                    <SelectValue placeholder={t('messages.chooseUser')} />
                   </SelectTrigger>
                   <SelectContent>
                     {users.map(user => (
@@ -216,19 +218,19 @@ const Messages = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium">Message</label>
+                <label className="text-sm font-medium">{t('messages.message')}</label>
                 <Textarea
                   value={newMessageText}
                   onChange={(e) => setNewMessageText(e.target.value)}
-                  placeholder="Type your message..."
+                  placeholder={t('messages.typeMessage')}
                   rows={4}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setNewMessageOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setNewMessageOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={sendNewMessage} disabled={isSending || !newMessageUserId || !newMessageText.trim()}>
-                {isSending ? "Sending..." : "Send Message"}
+                {isSending ? t('messages.sending') : t('messages.sendMessage')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -238,7 +240,7 @@ const Messages = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inbox</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('messages.inbox')}</CardTitle>
             <Inbox className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -247,7 +249,7 @@ const Messages = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unread</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('messages.unread')}</CardTitle>
             <MessageSquare className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
@@ -256,7 +258,7 @@ const Messages = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Reply</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('messages.pendingReply')}</CardTitle>
             <Reply className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -265,7 +267,7 @@ const Messages = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sent</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('messages.sent')}</CardTitle>
             <Send className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -279,20 +281,20 @@ const Messages = () => {
           <TabsList>
             <TabsTrigger value="inbox" className="flex items-center gap-2">
               <Inbox className="h-4 w-4" />
-              Inbox
+              {t('messages.inbox')}
               {unreadInboxCount > 0 && (
                 <Badge variant="destructive" className="ml-1">{unreadInboxCount}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="sent" className="flex items-center gap-2">
               <Send className="h-4 w-4" />
-              Sent Messages
+              {t('messages.sentMessages')}
             </TabsTrigger>
           </TabsList>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search messages..."
+              placeholder={t('messages.searchMessages')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -303,24 +305,24 @@ const Messages = () => {
         <TabsContent value="inbox">
           <Card>
             <CardHeader>
-              <CardTitle>Inbox Messages</CardTitle>
-              <CardDescription>Messages received from users</CardDescription>
+              <CardTitle>{t('messages.inboxMessages')}</CardTitle>
+              <CardDescription>{t('messages.messagesFromUsers')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>From</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>{t('common.date')}</TableHead>
+                    <TableHead>{t('messages.from')}</TableHead>
+                    <TableHead>{t('messages.subject')}</TableHead>
+                    <TableHead>{t('common.status')}</TableHead>
+                    <TableHead>{t('common.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredInbox.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center">No messages found</TableCell>
+                      <TableCell colSpan={5} className="text-center">{t('messages.noMessages')}</TableCell>
                     </TableRow>
                   ) : (
                     filteredInbox.map((msg) => (
@@ -339,11 +341,11 @@ const Messages = () => {
                         </TableCell>
                         <TableCell>
                           {msg.replied_at ? (
-                            <Badge variant="secondary">Replied</Badge>
+                            <Badge variant="secondary">{t('messages.replied')}</Badge>
                           ) : msg.is_read ? (
-                            <Badge variant="outline">Read</Badge>
+                            <Badge variant="outline">{t('messages.read')}</Badge>
                           ) : (
-                            <Badge variant="default">Unread</Badge>
+                            <Badge variant="default">{t('messages.unread')}</Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -359,42 +361,42 @@ const Messages = () => {
                                   }}
                                 >
                                   <Eye className="h-4 w-4 mr-1" />
-                                  View
+                                  {t('messages.viewMessage')}
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="max-w-2xl">
                                 <DialogHeader>
-                                  <DialogTitle>Message from {msg.first_name} {msg.last_name}</DialogTitle>
+                                  <DialogTitle>{t('messages.messageFrom')} {msg.first_name} {msg.last_name}</DialogTitle>
                                   <DialogDescription>{msg.email}</DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4">
                                   <div>
-                                    <label className="text-sm font-medium">Subject</label>
+                                    <label className="text-sm font-medium">{t('messages.subject')}</label>
                                     <p className="text-muted-foreground">{msg.subject}</p>
                                   </div>
                                   <div>
-                                    <label className="text-sm font-medium">Message</label>
+                                    <label className="text-sm font-medium">{t('messages.message')}</label>
                                     <div className="mt-2 p-4 bg-muted rounded-lg">
                                       <p className="whitespace-pre-wrap">{msg.message}</p>
                                     </div>
                                   </div>
                                   <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
-                                      <label className="font-medium">Received</label>
+                                      <label className="font-medium">{t('messages.received')}</label>
                                       <p className="text-muted-foreground">{new Date(msg.created_at).toLocaleString()}</p>
                                     </div>
                                     <div>
-                                      <label className="font-medium">Status</label>
-                                      <p>{msg.replied_at ? 'Replied' : msg.is_read ? 'Read' : 'Unread'}</p>
+                                      <label className="font-medium">{t('common.status')}</label>
+                                      <p>{msg.replied_at ? t('messages.replied') : msg.is_read ? t('messages.read') : t('messages.unread')}</p>
                                     </div>
                                   </div>
                                   {!msg.replied_at && (
                                     <div>
-                                      <label className="text-sm font-medium">Your Reply</label>
+                                      <label className="text-sm font-medium">{t('messages.yourReply')}</label>
                                       <Textarea
                                         value={replyText}
                                         onChange={(e) => setReplyText(e.target.value)}
-                                        placeholder="Type your reply..."
+                                        placeholder={t('messages.typeReply')}
                                         rows={4}
                                         className="mt-2"
                                       />
@@ -408,7 +410,7 @@ const Messages = () => {
                                       disabled={isReplying || !replyText.trim()}
                                     >
                                       <Reply className="h-4 w-4 mr-2" />
-                                      {isReplying ? "Sending..." : "Send Reply"}
+                                      {isReplying ? t('messages.sending') : t('messages.sendReply')}
                                     </Button>
                                   </DialogFooter>
                                 )}

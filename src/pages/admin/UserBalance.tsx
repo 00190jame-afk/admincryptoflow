@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Wallet, Search, DollarSign, Lock, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useTranslation } from 'react-i18next';
 
 interface UserBalance {
   id: string;
@@ -32,6 +33,7 @@ interface UserProfile {
 }
 
 const UserBalance = () => {
+  const { t } = useTranslation();
   const [balances, setBalances] = useState<UserBalance[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,8 +123,8 @@ const UserBalance = () => {
     } catch (error) {
       console.error('Error fetching user balances:', error);
       toast({
-        title: "Error",
-        description: "Failed to load user balances",
+        title: t('common.error'),
+        description: t('balance.failedUpdate'),
         variant: "destructive",
       });
     } finally {
@@ -161,8 +163,8 @@ const UserBalance = () => {
     // Validate inputs
     if (newBalance < 0 || newFrozen < 0 || newOnHold < 0) {
       toast({
-        title: "Error", 
-        description: "All amounts must be positive",
+        title: t('common.error'), 
+        description: t('balance.failedUpdate'),
         variant: "destructive",
       });
       return;
@@ -201,14 +203,14 @@ const UserBalance = () => {
       setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
 
       toast({
-        title: "Success",
-        description: "User balance updated successfully",
+        title: t('common.success'),
+        description: t('balance.balanceUpdated'),
       });
     } catch (error) {
       console.error('Error performing balance action:', error);
       toast({
-        title: "Error",
-        description: `Failed to update user balance`,
+        title: t('common.error'),
+        description: t('balance.failedUpdate'),
         variant: "destructive",
       });
     }
@@ -244,16 +246,16 @@ const UserBalance = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">User Balance Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('balance.title')}</h1>
         <p className="text-muted-foreground">
-          Monitor and manage user account balances - Set balances directly in each field
+          {t('balance.description')}
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('balance.totalUsers')}</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -262,7 +264,7 @@ const UserBalance = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('balance.totalBalance')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -271,7 +273,7 @@ const UserBalance = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Frozen</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('balance.totalFrozen')}</CardTitle>
             <Lock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -280,7 +282,7 @@ const UserBalance = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total On Hold</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('balance.totalOnHold')}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -291,14 +293,14 @@ const UserBalance = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>User Balances</CardTitle>
+          <CardTitle>{t('balance.allBalances')}</CardTitle>
           <CardDescription>
-            View and manage all user account balances - Click the dollar icon to edit balances directly
+            {t('balance.manageBalances')}
           </CardDescription>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search users..."
+              placeholder={t('balance.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -309,27 +311,27 @@ const UserBalance = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Credit Score</TableHead>
-                <TableHead>Available Balance</TableHead>
-                <TableHead>Frozen</TableHead>
-                <TableHead>On Hold</TableHead>
+                <TableHead>{t('common.user')}</TableHead>
+                <TableHead>{t('users.creditScore')}</TableHead>
+                <TableHead>{t('balance.availableBalance')}</TableHead>
+                <TableHead>{t('balance.frozen')}</TableHead>
+                <TableHead>{t('balance.onHold')}</TableHead>
                 <TableHead>Currency</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('balance.lastUpdated')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center">
-                    Loading user balances...
+                    {t('balance.loadingBalances')}
                   </TableCell>
                 </TableRow>
               ) : filteredBalances.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center">
-                    No user balances found
+                    {t('balance.noBalances')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -400,34 +402,34 @@ const UserBalance = () => {
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
-                            <DialogTitle>Manage User Balance</DialogTitle>
+                            <DialogTitle>{t('balance.editBalance')}</DialogTitle>
                             <DialogDescription>
-                              Update balance fields directly for {getUserDisplayName(balance.user_id)}
+                              {t('balance.editBalanceFor')} {getUserDisplayName(balance.user_id)}
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
                             <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
                               <div>
-                                <label className="text-sm font-medium">Current Available</label>
+                                <label className="text-sm font-medium">{t('balance.available')}</label>
                                 <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium">Current Frozen</label>
+                                <label className="text-sm font-medium">{t('balance.frozen')}</label>
                                 <p className="text-lg font-bold">${balance.frozen.toFixed(2)}</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium">Current On Hold</label>
+                                <label className="text-sm font-medium">{t('balance.onHold')}</label>
                                 <p className="text-lg font-bold">${balance.on_hold.toFixed(2)}</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium">Credit Score</label>
+                                <label className="text-sm font-medium">{t('users.creditScore')}</label>
                                 <p className="text-lg font-bold">{getUserProfile(balance.user_id)?.credit_score ?? 100}</p>
                               </div>
                             </div>
 
                             <div className="grid grid-cols-4 gap-4">
                               <div>
-                                <label className="text-sm font-medium mb-2 block">Available Balance</label>
+                                <label className="text-sm font-medium mb-2 block">{t('balance.availableBalance')}</label>
                                 <Input
                                   type="number"
                                   step="0.01"
@@ -436,10 +438,9 @@ const UserBalance = () => {
                                   value={balanceInputs.balance}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, balance: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Set to 0 to move all</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium mb-2 block">Frozen Balance</label>
+                                <label className="text-sm font-medium mb-2 block">{t('balance.frozenBalance')}</label>
                                 <Input
                                   type="number"
                                   step="0.01"
