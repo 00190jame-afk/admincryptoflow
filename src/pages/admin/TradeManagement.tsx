@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,6 +33,7 @@ interface Trade {
 }
 
 const TradeManagement = () => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const { markAsRead } = useNotifications();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
@@ -45,100 +47,44 @@ const TradeManagement = () => {
 
   useEffect(() => {
     if (adminLoading) return;
-    
     fetchTrades();
-    
-    // Mark trades as read when component loads
     markAsRead('trades');
-    
-    // Set up real-time subscription for new trades
+
     const tradesChannel = supabase
       .channel('trades-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'trades'
-        },
-        (payload) => {
-          // New trade received
-          // Add the new trade to the beginning of the list
-          setTrades((prevTrades) => [payload.new as Trade, ...prevTrades]);
-          // Mark this trade as new for highlighting
-          setNewTradeIds((prev) => new Set([...prev, payload.new.id]));
-          // Auto-remove the highlight after 30 seconds
-          setTimeout(() => {
-            setNewTradeIds((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(payload.new.id);
-              return newSet;
-            });
-          }, 30000);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'trades'
-        },
-        (payload) => {
-          // Trade updated
-          // Update the existing trade in the list
-          setTrades((prevTrades) => 
-            prevTrades.map((trade) => 
-              trade.id === payload.new.id ? payload.new as Trade : trade
-            )
-          );
-        }
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades' }, (payload) => {
+        setTrades((prev) => [payload.new as Trade, ...prev]);
+        setNewTradeIds((prev) => new Set([...prev, payload.new.id]));
+        setTimeout(() => {
+          setNewTradeIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(payload.new.id);
+            return newSet;
+          });
+        }, 30000);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trades' }, (payload) => {
+        setTrades((prev) => prev.map((trade) => trade.id === payload.new.id ? payload.new as Trade : trade));
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(tradesChannel);
-    };
+    return () => { supabase.removeChannel(tradesChannel); };
   }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
 
   const fetchTrades = async () => {
     try {
-      // Regular admin with no assigned users should see empty array
       if (!isSuperAdmin && assignedUserIds.length === 0) {
         setTrades([]);
         setLoading(false);
         return;
       }
 
-      let query = supabase
-        .from('trades')
-        .select(`
-          id,
-          user_id,
-          email,
-          trading_pair,
-          direction,
-          stake_amount,
-          leverage,
-          entry_price,
-          current_price,
-          status,
-          result,
-          profit_loss_amount,
-          created_at,
-          ends_at,
-          completed_at
-        `);
-
-      // If not super admin, filter to only assigned users
+      let query = supabase.from('trades').select('*');
       if (!isSuperAdmin && assignedUserIds.length > 0) {
         query = query.in('user_id', assignedUserIds);
       }
 
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .limit(100);
-
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
       if (error) throw error;
       setTrades(data || []);
     } catch (error) {
@@ -149,122 +95,73 @@ const TradeManagement = () => {
   };
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
-    // 1. Close dialog immediately (optimistic)
     setDialogOpen(null);
-    
-    // 2. Update local state immediately (optimistic)
     setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
-    
-    // 3. Show immediate feedback
-    toast({
-      title: 'Processing',
-      description: `Setting trade as ${result.toUpperCase()}...`,
-    });
+    toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
 
-    // 4. Call edge function in background
     try {
-      const { data, error } = await supabase.functions.invoke('set-trade-win', {
-        body: { tradeId }
-      });
-
+      const { data, error } = await supabase.functions.invoke('set-trade-win', { body: { tradeId } });
       if (error || data?.error) {
-        console.error('Edge function error:', error || data?.error);
-        toast({
-          title: 'Error',
-          description: error?.message || data?.error || 'Failed to update trade',
-          variant: 'destructive',
-        });
-        // Revert optimistic update on error
+        toast({ title: t('common.error'), description: error?.message || data?.error, variant: 'destructive' });
         fetchTrades();
         return;
       }
-
-      toast({
-        title: 'Success',
-        description: `Trade marked as ${result.toUpperCase()} successfully`,
-      });
+      toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
     } catch (error) {
-      console.error('Unexpected error updating trade:', error);
-      toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-      fetchTrades(); // Refresh on error to revert optimistic update
+      toast({ title: t('common.error'), description: 'An unexpected error occurred', variant: 'destructive' });
+      fetchTrades();
     }
   };
 
   const filteredTrades = trades.filter(trade => {
-    const matchesSearch = 
-      trade.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = trade.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       trade.trading_pair?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       trade.id.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = statusFilter === 'all' || trade.status === statusFilter;
-    
     return matchesSearch && matchesStatus;
   });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <Clock className="h-4 w-4" />;
-      case 'win':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'lose':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <Clock className="h-4 w-4" />;
+      case 'pending': return <Clock className="h-4 w-4" />;
+      case 'win': return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'lose': return <XCircle className="h-4 w-4 text-red-600" />;
+      default: return <Clock className="h-4 w-4" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <Badge variant="secondary">Pending</Badge>;
-      case 'win':
-        return <Badge className="bg-green-100 text-green-800">Win</Badge>;
-      case 'lose':
-        return <Badge variant="destructive">Lose</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+      case 'pending': return <Badge variant="secondary">{t('trades.pending')}</Badge>;
+      case 'win': return <Badge className="bg-green-100 text-green-800">{t('trades.win')}</Badge>;
+      case 'lose': return <Badge variant="destructive">{t('trades.lose')}</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Trade Management</h1>
-        <p className="text-muted-foreground">
-          Monitor and manage platform trades
-        </p>
+        <h1 className="text-3xl font-bold text-foreground">{t('trades.title')}</h1>
+        <p className="text-muted-foreground">{t('trades.description')}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Trades</CardTitle>
-          <CardDescription>
-            View and manage trade results
-          </CardDescription>
+          <CardTitle>{t('trades.allTrades')}</CardTitle>
+          <CardDescription>{t('trades.viewManageTrades')}</CardDescription>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by email, pair, or ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
+              <Input placeholder={t('trades.searchPlaceholder')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+              <SelectTrigger className="w-32"><SelectValue placeholder={t('common.status')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="win">Win</SelectItem>
-                <SelectItem value="lose">Lose</SelectItem>
+                <SelectItem value="all">{t('trades.allStatus')}</SelectItem>
+                <SelectItem value="pending">{t('trades.pending')}</SelectItem>
+                <SelectItem value="win">{t('trades.win')}</SelectItem>
+                <SelectItem value="lose">{t('trades.lose')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -273,44 +170,32 @@ const TradeManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Trade ID</TableHead>
-                <TableHead>User Email</TableHead>
-                <TableHead>Pair</TableHead>
-                <TableHead>Direction</TableHead>
-                <TableHead>Stake</TableHead>
-                <TableHead>Leverage</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>P&L</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('trades.tradeId')}</TableHead>
+                <TableHead>{t('trades.userEmail')}</TableHead>
+                <TableHead>{t('trades.pair')}</TableHead>
+                <TableHead>{t('trades.direction')}</TableHead>
+                <TableHead>{t('trades.stake')}</TableHead>
+                <TableHead>{t('trades.leverage')}</TableHead>
+                <TableHead>{t('common.status')}</TableHead>
+                <TableHead>{t('trades.pnl')}</TableHead>
+                <TableHead>{t('trades.created')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center">
-                    Loading trades...
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center">{t('trades.loadingTrades')}</TableCell></TableRow>
               ) : filteredTrades.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center">
-                    No trades found
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center">{t('trades.noTrades')}</TableCell></TableRow>
               ) : (
                 filteredTrades.map((trade) => (
-                  <TableRow 
-                    key={trade.id} 
-                    className={newTradeIds.has(trade.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}
-                  >
+                  <TableRow key={trade.id} className={newTradeIds.has(trade.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}>
                     <TableCell className="font-mono text-xs">
                       <div className="flex items-center space-x-2">
                         <span>{trade.id.substring(0, 8)}...</span>
                         {newTradeIds.has(trade.id) && (
                           <Badge variant="destructive" className="text-xs animate-bounce">
-                            <Sparkles className="h-3 w-3 mr-1" />
-                            NEW
+                            <Sparkles className="h-3 w-3 mr-1" />{t('common.new')}
                           </Badge>
                         )}
                       </div>
@@ -319,88 +204,40 @@ const TradeManagement = () => {
                     <TableCell className="font-medium">{trade.trading_pair}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-1">
-                        {trade.direction === 'up' ? (
-                          <TrendingUp className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-600" />
-                        )}
-                        <span className="capitalize">{trade.direction}</span>
+                        {trade.direction === 'up' ? <TrendingUp className="h-4 w-4 text-green-600" /> : <TrendingDown className="h-4 w-4 text-red-600" />}
+                        <span className="capitalize">{trade.direction === 'up' ? t('trades.up') : t('trades.down')}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono">
-                      ${trade.stake_amount.toFixed(2)}
-                    </TableCell>
+                    <TableCell className="font-mono">${trade.stake_amount.toFixed(2)}</TableCell>
                     <TableCell>{trade.leverage}x</TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(trade.status)}
-                        {getStatusBadge(trade.status)}
-                      </div>
+                      <div className="flex items-center space-x-2">{getStatusIcon(trade.status)}{getStatusBadge(trade.status)}</div>
                     </TableCell>
                     <TableCell>
                       {trade.profit_loss_amount ? (
-                        <span className={`font-mono ${
-                          trade.profit_loss_amount > 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          ${trade.profit_loss_amount.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                        <span className={`font-mono ${trade.profit_loss_amount > 0 ? 'text-green-600' : 'text-red-600'}`}>${trade.profit_loss_amount.toFixed(2)}</span>
+                      ) : <span className="text-muted-foreground">-</span>}
                     </TableCell>
-                    <TableCell>
-                      {new Date(trade.created_at).toLocaleDateString()}
-                    </TableCell>
+                    <TableCell>{new Date(trade.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       {trade.status === 'pending' && (
-                        <div className="flex space-x-2">
-                          <Dialog 
-                            open={dialogOpen === trade.id} 
-                            onOpenChange={(open) => setDialogOpen(open ? trade.id : null)}
-                          >
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                Set Result
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Set as Win</DialogTitle>
-                                <DialogDescription>
-                                  Set trade {trade.id.substring(0, 8)}... as winning trade.
-                                  <br />
-                                  <span className="font-medium">
-                                    {trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}
-                                  </span>
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <Alert>
-                                  <AlertDescription>
-                                    This action will permanently set the trade result and cannot be undone. 
-                                    The system will automatically process payouts and update user balances.
-                                  </AlertDescription>
-                                </Alert>
-                               <div className="flex justify-center">
-                                  <Button
-                                    onClick={() => updateTradeResult(trade.id, 'win')}
-                                    disabled={updating === trade.id}
-                                    className="bg-green-600 hover:bg-green-700"
-                                  >
-                                    {updating === trade.id ? (
-                                      <>Processing...</>
-                                    ) : (
-                                      <>
-                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                        Set as Win
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
+                        <Dialog open={dialogOpen === trade.id} onOpenChange={(open) => setDialogOpen(open ? trade.id : null)}>
+                          <DialogTrigger asChild><Button variant="outline" size="sm">{t('trades.setResult')}</Button></DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>{t('trades.setAsWin')}</DialogTitle>
+                              <DialogDescription>{t('trades.setWinDescription')}<br /><span className="font-medium">{trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}</span></DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <Alert><AlertDescription>{t('trades.permanentAction')}</AlertDescription></Alert>
+                              <div className="flex justify-center">
+                                <Button onClick={() => updateTradeResult(trade.id, 'win')} disabled={updating === trade.id} className="bg-green-600 hover:bg-green-700">
+                                  {updating === trade.id ? t('common.processing') : <><CheckCircle className="mr-2 h-4 w-4" />{t('trades.setAsWin')}</>}
+                                </Button>
                               </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       )}
                     </TableCell>
                   </TableRow>
