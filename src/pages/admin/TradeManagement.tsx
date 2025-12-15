@@ -187,7 +187,7 @@ const TradeManagement = () => {
       setDialogOpen(null);
       // Optimistically update local state so actions hide immediately
       setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
-      await fetchTrades(); // Ensure fresh data and trigger any UI updates
+      // Real-time subscription will handle any additional updates
     } catch (error) {
       console.error('Unexpected error updating trade:', error);
       toast({
