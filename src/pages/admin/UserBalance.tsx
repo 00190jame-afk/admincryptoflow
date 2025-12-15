@@ -5,10 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Wallet, Plus, Minus, Search, DollarSign, Lock, Unlock, Clock } from 'lucide-react';
+import { Wallet, Search, DollarSign, Lock, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminRole } from '@/hooks/useAdminRole';
 
@@ -38,7 +37,6 @@ const UserBalance = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBalance, setSelectedBalance] = useState<UserBalance | null>(null);
-  const [adjustmentDescription, setAdjustmentDescription] = useState('');
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
   const [balanceInputs, setBalanceInputs] = useState({
     balance: '',
@@ -176,7 +174,7 @@ const UserBalance = () => {
         p_balance: newBalance,
         p_frozen: newFrozen,
         p_on_hold: newOnHold,
-        p_description: adjustmentDescription || 'Admin balance update'
+        p_description: 'Admin balance update'
       });
 
       if (error) throw error;
@@ -201,7 +199,6 @@ const UserBalance = () => {
       setShowAdjustmentDialog(false);
       setSelectedBalance(null);
       setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
-      setAdjustmentDescription('');
 
       toast({
         title: "Success",
@@ -380,7 +377,6 @@ const UserBalance = () => {
                         if (!open) {
                           setSelectedBalance(null);
                           setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
-                          setAdjustmentDescription('');
                         }
                       }}>
                         <DialogTrigger asChild>
@@ -481,16 +477,6 @@ const UserBalance = () => {
                               </div>
                             </div>
                             
-                            <div>
-                              <label className="text-sm font-medium mb-2 block">Description</label>
-                              <Textarea
-                                placeholder="Reason for balance update..."
-                                value={adjustmentDescription}
-                                onChange={(e) => setAdjustmentDescription(e.target.value)}
-                                rows={3}
-                              />
-                            </div>
-
                             <div className="flex justify-end gap-2">
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
