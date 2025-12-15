@@ -10,6 +10,7 @@ import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles } from 'luc
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useTranslation } from 'react-i18next';
 
 interface RechargeCode {
   id: string;
@@ -30,6 +31,7 @@ interface UserProfile {
 }
 
 const RechargeCodeManagement = () => {
+  const { t } = useTranslation();
   const [codes, setCodes] = useState<RechargeCode[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,8 +140,8 @@ const RechargeCodeManagement = () => {
       // Only show error toast for real errors, not auth issues
       if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
         toast({
-          title: "Error",
-          description: "Failed to load recharge codes",
+          title: t('common.error'),
+          description: t('recharge.failedCreate'),
           variant: "destructive",
         });
       }
@@ -179,8 +181,8 @@ const RechargeCodeManagement = () => {
     const amount = parseFloat(newCodeAmount);
     if (!amount || amount <= 0) {
       toast({
-        title: "Error",
-        description: "Please enter a valid amount",
+        title: t('common.error'),
+        description: t('recharge.failedCreate'),
         variant: "destructive",
       });
       return;
@@ -199,14 +201,14 @@ const RechargeCodeManagement = () => {
       fetchRechargeCodes();
       
       toast({
-        title: "Success",
-        description: "Recharge code created successfully",
+        title: t('common.success'),
+        description: t('recharge.codeCreated'),
       });
     } catch (error) {
       console.error('Error creating recharge code:', error);
       toast({
-        title: "Error",
-        description: "Failed to create recharge code",
+        title: t('common.error'),
+        description: t('recharge.failedCreate'),
         variant: "destructive",
       });
     }
@@ -215,8 +217,8 @@ const RechargeCodeManagement = () => {
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     toast({
-      title: "Copied",
-      description: "Code copied to clipboard",
+      title: t('recharge.copy'),
+      description: t('recharge.copied'),
     });
   };
 
@@ -246,16 +248,16 @@ const RechargeCodeManagement = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Recharge Code Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('recharge.title')}</h1>
         <p className="text-muted-foreground">
-          Create and manage recharge codes for user account top-ups
+          {t('recharge.description')}
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Codes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('recharge.totalCodes')}</CardTitle>
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -264,7 +266,7 @@ const RechargeCodeManagement = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unused Codes</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('recharge.unusedCodes')}</CardTitle>
             <CreditCard className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -273,7 +275,7 @@ const RechargeCodeManagement = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('recharge.totalValue')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -282,7 +284,7 @@ const RechargeCodeManagement = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Redeemed Value</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('recharge.redeemedValue')}</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -294,27 +296,27 @@ const RechargeCodeManagement = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            All Recharge Codes
+            {t('recharge.allCodes')}
             <Dialog open={showNewCodeDialog} onOpenChange={setShowNewCodeDialog}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Code
+                  {t('recharge.createCode')}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create New Recharge Code</DialogTitle>
+                  <DialogTitle>{t('recharge.createNewCode')}</DialogTitle>
                   <DialogDescription>
-                    Generate a new recharge code with specified amount
+                    {t('recharge.description')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium">Amount (USDT)</label>
+                    <label className="text-sm font-medium">{t('common.amount')} (USDT)</label>
                     <Input
                       type="number"
-                      placeholder="Enter amount..."
+                      placeholder={t('recharge.enterAmount')}
                       value={newCodeAmount}
                       onChange={(e) => setNewCodeAmount(e.target.value)}
                       className="mt-1"
@@ -323,19 +325,19 @@ const RechargeCodeManagement = () => {
                     />
                   </div>
                   <Button onClick={createRechargeCode} className="w-full">
-                    Create Recharge Code
+                    {t('recharge.createCode')}
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
           </CardTitle>
           <CardDescription>
-            Manage recharge codes for user account funding
+            {t('recharge.manageViewCodes')}
           </CardDescription>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search codes..."
+              placeholder={t('recharge.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -346,26 +348,26 @@ const RechargeCodeManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Redeemed By</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Redeemed</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('common.code')}</TableHead>
+                <TableHead>{t('common.amount')}</TableHead>
+                <TableHead>{t('common.status')}</TableHead>
+                <TableHead>{t('recharge.redeemedBy')}</TableHead>
+                <TableHead>{t('recharge.createdAt')}</TableHead>
+                <TableHead>{t('recharge.redeemedAt')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center">
-                    Loading recharge codes...
+                    {t('recharge.loadingCodes')}
                   </TableCell>
                 </TableRow>
               ) : filteredCodes.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center">
-                    No recharge codes found
+                    {t('recharge.noCodes')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -399,7 +401,7 @@ const RechargeCodeManagement = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant={code.status === 'unused' ? 'default' : 'secondary'}>
-                        {code.status === 'unused' ? 'Unused' : 'Redeemed'}
+                        {code.status === 'unused' ? t('recharge.unused') : t('recharge.redeemed')}
                       </Badge>
                     </TableCell>
                     <TableCell>
