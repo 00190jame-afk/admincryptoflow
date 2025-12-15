@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { notificationAudio } from '@/lib/NotificationAudio';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, TrendingUp, DollarSign, Activity } from 'lucide-react';
@@ -14,6 +15,7 @@ interface DashboardStats {
 
 const Dashboard = () => {
   const { t } = useTranslation();
+  const { user, isSuperAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     activeTrades: 0,
@@ -24,18 +26,53 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!user) return;
+      
       try {
-        const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        const { count: tradeCount } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'pending');
-        const { data: balanceData } = await supabase.from('user_balances').select('balance');
-        const totalBalance = balanceData?.reduce((sum, item) => sum + (item.balance || 0), 0) || 0;
-        const { count: withdrawalCount } = await supabase.from('withdraw_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+        let assignedUserIds: string[] = [];
+        
+        // For regular admins, get their assigned users
+        if (!isSuperAdmin) {
+          const { data: assignedUsers } = await supabase.rpc('get_admin_assigned_users', {
+            p_admin_user_id: user.id
+          });
+          assignedUserIds = assignedUsers?.map((row: any) => row.user_id) || [];
+          
+          // If no assigned users, show zeros
+          if (assignedUserIds.length === 0) {
+            setStats({ totalUsers: 0, activeTrades: 0, totalBalance: 0, pendingWithdrawals: 0 });
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Fetch stats - filter by assigned users for regular admins
+        let userQuery = supabase.from('profiles').select('*', { count: 'exact', head: true });
+        let tradeQuery = supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+        let balanceQuery = supabase.from('user_balances').select('balance');
+        let withdrawalQuery = supabase.from('withdraw_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+
+        if (!isSuperAdmin && assignedUserIds.length > 0) {
+          userQuery = userQuery.in('user_id', assignedUserIds);
+          tradeQuery = tradeQuery.in('user_id', assignedUserIds);
+          balanceQuery = balanceQuery.in('user_id', assignedUserIds);
+          withdrawalQuery = withdrawalQuery.in('user_id', assignedUserIds);
+        }
+
+        const [userResult, tradeResult, balanceResult, withdrawalResult] = await Promise.all([
+          userQuery,
+          tradeQuery,
+          balanceQuery,
+          withdrawalQuery
+        ]);
+
+        const totalBalance = balanceResult.data?.reduce((sum, item) => sum + (item.balance || 0), 0) || 0;
 
         setStats({
-          totalUsers: userCount || 0,
-          activeTrades: tradeCount || 0,
+          totalUsers: userResult.count || 0,
+          activeTrades: tradeResult.count || 0,
           totalBalance,
-          pendingWithdrawals: withdrawalCount || 0
+          pendingWithdrawals: withdrawalResult.count || 0
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
@@ -54,7 +91,7 @@ const Dashboard = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [user, isSuperAdmin]);
 
   const statCards = [
     { title: t('dashboard.totalUsers'), value: stats.totalUsers, description: t('dashboard.registeredUsers'), icon: Users, color: 'text-blue-600' },
