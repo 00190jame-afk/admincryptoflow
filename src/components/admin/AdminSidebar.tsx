@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import {
@@ -25,28 +26,28 @@ import {
   Sliders,
 } from 'lucide-react';
 
-const mainItems = [
-  { title: 'Dashboard', url: '/admin', icon: LayoutDashboard, countKey: null },
-  { title: 'User Management', url: '/admin/users', icon: Users, countKey: 'users' as const },
-  { title: 'Trade Management', url: '/admin/trades', icon: TrendingUp, countKey: 'trades' as const },
-  { title: 'Messages', url: '/admin/messages', icon: MessageSquare, countKey: 'messages' as const },
-  { title: 'Recharge Codes', url: '/admin/recharge', icon: CreditCard, countKey: 'rechargeCodes' as const },
-  { title: 'User Balance', url: '/admin/balance', icon: DollarSign, countKey: 'balanceChanges' as const },
-  { title: 'Withdrawal Requests', url: '/admin/withdrawals', icon: TrendingUp, countKey: 'withdrawals' as const },
-];
-
-const superAdminItems = [
-  { title: 'Admin Management', url: '/admin/admins', icon: Shield },
-  { title: 'Trade Rules', url: '/admin/rules', icon: Sliders },
-];
-
-
 export function AdminSidebar() {
+  const { t } = useTranslation();
   const { state } = useSidebar();
   const { isSuperAdmin } = useAuth();
   const { counts } = useNotifications();
   const location = useLocation();
   const currentPath = location.pathname;
+
+  const mainItems = [
+    { title: t('nav.dashboard'), url: '/admin', icon: LayoutDashboard, countKey: null },
+    { title: t('nav.userManagement'), url: '/admin/users', icon: Users, countKey: 'users' as const },
+    { title: t('nav.tradeManagement'), url: '/admin/trades', icon: TrendingUp, countKey: 'trades' as const },
+    { title: t('nav.messages'), url: '/admin/messages', icon: MessageSquare, countKey: 'messages' as const },
+    { title: t('nav.rechargeCodes'), url: '/admin/recharge', icon: CreditCard, countKey: 'rechargeCodes' as const },
+    { title: t('nav.userBalance'), url: '/admin/balance', icon: DollarSign, countKey: 'balanceChanges' as const },
+    { title: t('nav.withdrawalRequests'), url: '/admin/withdrawals', icon: TrendingUp, countKey: 'withdrawals' as const },
+  ];
+
+  const superAdminItems = [
+    { title: t('nav.adminManagement'), url: '/admin/admins', icon: Shield },
+    { title: t('nav.tradeRules'), url: '/admin/rules', icon: Sliders },
+  ];
 
   const isActive = (path: string) => {
     if (path === '/admin') {
@@ -67,13 +68,13 @@ export function AdminSidebar() {
     <Sidebar className={state === "collapsed" ? "w-14" : "w-60"} collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>{t('nav.mainNavigation')}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => {
                 const count = item.countKey === null ? totalCount : counts[item.countKey];
                 return (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild>
                       <NavLink to={item.url} className={`${getNavCls(item.url)} flex items-center justify-between`}>
                         <div className="flex items-center">
@@ -96,11 +97,11 @@ export function AdminSidebar() {
 
         {isSuperAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Super Admin</SidebarGroupLabel>
+            <SidebarGroupLabel>{t('nav.superAdmin')}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {superAdminItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild>
                       <NavLink to={item.url} className={getNavCls(item.url)}>
                         <item.icon className="mr-2 h-4 w-4" />
