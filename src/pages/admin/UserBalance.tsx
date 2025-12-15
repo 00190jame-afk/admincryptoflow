@@ -29,6 +29,7 @@ interface UserProfile {
   email: string;
   first_name?: string;
   last_name?: string;
+  credit_score?: number;
 }
 
 const UserBalance = () => {
@@ -42,7 +43,8 @@ const UserBalance = () => {
   const [balanceInputs, setBalanceInputs] = useState({
     balance: '',
     frozen: '',
-    onHold: ''
+    onHold: '',
+    creditScore: ''
   });
   const [newBalanceIds, setNewBalanceIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -134,7 +136,7 @@ const UserBalance = () => {
     try {
       let query = supabase
         .from('profiles')
-        .select('user_id, email, first_name, last_name');
+        .select('user_id, email, first_name, last_name, credit_score');
 
       // Filter profiles for regular admins to only show assigned users
       if (!isSuperAdmin && assignedUserIds.length > 0) {
@@ -179,10 +181,26 @@ const UserBalance = () => {
 
       if (error) throw error;
 
+      // Update credit score in profiles table if changed
+      if (balanceInputs.creditScore !== '') {
+        const newCreditScore = parseInt(balanceInputs.creditScore);
+        const { error: creditError } = await supabase
+          .from('profiles')
+          .update({ credit_score: newCreditScore })
+          .eq('user_id', selectedBalance.user_id);
+        
+        if (creditError) {
+          console.error('Error updating credit score:', creditError);
+        } else {
+          // Refresh profiles to get updated credit score
+          fetchProfiles();
+        }
+      }
+
       fetchUserBalances();
       setShowAdjustmentDialog(false);
       setSelectedBalance(null);
-      setBalanceInputs({ balance: '', frozen: '', onHold: '' });
+      setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
       setAdjustmentDescription('');
 
       toast({
@@ -295,6 +313,7 @@ const UserBalance = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
+                <TableHead>Credit Score</TableHead>
                 <TableHead>Available Balance</TableHead>
                 <TableHead>Frozen</TableHead>
                 <TableHead>On Hold</TableHead>
@@ -306,13 +325,13 @@ const UserBalance = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">
+                  <TableCell colSpan={8} className="text-center">
                     Loading user balances...
                   </TableCell>
                 </TableRow>
               ) : filteredBalances.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">
+                  <TableCell colSpan={8} className="text-center">
                     No user balances found
                   </TableCell>
                 </TableRow>
@@ -337,6 +356,9 @@ const UserBalance = () => {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <span className="font-medium">{getUserProfile(balance.user_id)?.credit_score ?? 100}</span>
+                    </TableCell>
                     <TableCell className="font-medium">
                       ${balance.balance.toFixed(2)}
                     </TableCell>
@@ -357,7 +379,7 @@ const UserBalance = () => {
                         setShowAdjustmentDialog(open);
                         if (!open) {
                           setSelectedBalance(null);
-                          setBalanceInputs({ balance: '', frozen: '', onHold: '' });
+                          setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
                           setAdjustmentDescription('');
                         }
                       }}>
@@ -366,11 +388,13 @@ const UserBalance = () => {
                             variant="outline" 
                             size="sm"
                             onClick={() => {
+                              const profile = getUserProfile(balance.user_id);
                               setSelectedBalance(balance);
                               setBalanceInputs({
                                 balance: balance.balance.toString(),
                                 frozen: balance.frozen.toString(),
-                                onHold: balance.on_hold.toString()
+                                onHold: balance.on_hold.toString(),
+                                creditScore: (profile?.credit_score ?? 100).toString()
                               });
                               setShowAdjustmentDialog(true);
                             }}
@@ -386,7 +410,7 @@ const UserBalance = () => {
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                            <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
                               <div>
                                 <label className="text-sm font-medium">Current Available</label>
                                 <p className="text-lg font-bold">${balance.balance.toFixed(2)}</p>
@@ -399,9 +423,13 @@ const UserBalance = () => {
                                 <label className="text-sm font-medium">Current On Hold</label>
                                 <p className="text-lg font-bold">${balance.on_hold.toFixed(2)}</p>
                               </div>
+                              <div>
+                                <label className="text-sm font-medium">Credit Score</label>
+                                <p className="text-lg font-bold">{getUserProfile(balance.user_id)?.credit_score ?? 100}</p>
+                              </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-4 gap-4">
                               <div>
                                 <label className="text-sm font-medium mb-2 block">Available Balance</label>
                                 <Input
@@ -412,7 +440,7 @@ const UserBalance = () => {
                                   value={balanceInputs.balance}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, balance: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Set to 0 to move all to other fields</p>
+                                <p className="text-xs text-muted-foreground mt-1">Set to 0 to move all</p>
                               </div>
                               <div>
                                 <label className="text-sm font-medium mb-2 block">Frozen Balance</label>
@@ -424,7 +452,7 @@ const UserBalance = () => {
                                   value={balanceInputs.frozen}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, frozen: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Frozen funds (restricted)</p>
+                                <p className="text-xs text-muted-foreground mt-1">Frozen funds</p>
                               </div>
                               <div>
                                 <label className="text-sm font-medium mb-2 block">On Hold Balance</label>
@@ -436,7 +464,20 @@ const UserBalance = () => {
                                   value={balanceInputs.onHold}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, onHold: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Temporarily held funds</p>
+                                <p className="text-xs text-muted-foreground mt-1">Temporarily held</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">Credit Score</label>
+                                <Input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  max="1000"
+                                  placeholder="100"
+                                  value={balanceInputs.creditScore}
+                                  onChange={(e) => setBalanceInputs(prev => ({ ...prev, creditScore: e.target.value }))}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">User credit score</p>
                               </div>
                             </div>
                             
@@ -467,6 +508,7 @@ const UserBalance = () => {
                                       <br />• Available: ${parseFloat(balanceInputs.balance || '0').toFixed(2)}
                                       <br />• Frozen: ${parseFloat(balanceInputs.frozen || '0').toFixed(2)}
                                       <br />• On Hold: ${parseFloat(balanceInputs.onHold || '0').toFixed(2)}
+                                      <br />• Credit Score: {parseInt(balanceInputs.creditScore || '100')}
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
