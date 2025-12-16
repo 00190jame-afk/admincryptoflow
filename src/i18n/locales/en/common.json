@@ -240,7 +240,9 @@
     "copy": "Copy",
     "copied": "Code copied to clipboard",
     "loadingCodes": "Loading recharge codes...",
-    "noCodes": "No recharge codes found"
+    "noCodes": "No recharge codes found",
+    "codeDeleted": "Recharge code deleted successfully",
+    "failedDelete": "Failed to delete recharge code"
   },
   "admin": {
     "title": "Admin Management",
