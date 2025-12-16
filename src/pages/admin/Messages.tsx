@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 const Messages = () => {
   const { t } = useTranslation();
@@ -30,18 +31,29 @@ const Messages = () => {
   
   const { inboxMessages, outboxMessages, isLoading, unreadInboxCount, pendingReplyCount } = useMessages();
   const { toast } = useToast();
+  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
-  // Fetch users for new message dropdown
+  // Fetch users for new message dropdown - filtered by assigned users for regular admins
   const { data: users = [] } = useQuery({
-    queryKey: ['users-for-messages'],
+    queryKey: ['users-for-messages', assignedUserIds, isSuperAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
         .select('user_id, first_name, last_name, email')
         .order('first_name');
+      
+      // Filter for regular admin
+      if (!isSuperAdmin && assignedUserIds.length > 0) {
+        query = query.in('user_id', assignedUserIds);
+      } else if (!isSuperAdmin) {
+        return []; // No assigned users yet
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
+    enabled: !adminLoading,
   });
 
   const markAsRead = async (messageId: string) => {
