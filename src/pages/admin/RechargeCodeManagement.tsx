@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles } from 'lucide-react';
+import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -91,6 +91,18 @@ const RechargeCodeManagement = () => {
               code.id === payload.new.id ? payload.new as RechargeCode : code
             )
           );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'recharge_codes'
+        },
+        (payload) => {
+          // Recharge code deleted
+          setCodes((prevCodes) => prevCodes.filter((code) => code.id !== payload.old.id));
         }
       )
       .subscribe();
@@ -222,6 +234,30 @@ const RechargeCodeManagement = () => {
       title: t('recharge.copy'),
       description: t('recharge.copied'),
     });
+  };
+
+  const deleteCode = async (codeId: string) => {
+    try {
+      const { error } = await supabase
+        .from('recharge_codes')
+        .delete()
+        .eq('id', codeId)
+        .eq('status', 'unused'); // Safety: only delete unused codes
+
+      if (error) throw error;
+      
+      toast({
+        title: t('common.success'),
+        description: t('recharge.codeDeleted') || 'Recharge code deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting recharge code:', error);
+      toast({
+        title: t('common.error'),
+        description: t('recharge.failedDelete') || 'Failed to delete recharge code',
+        variant: "destructive",
+      });
+    }
   };
 
   const getUserProfile = (userId: string) => {
@@ -428,13 +464,25 @@ const RechargeCodeManagement = () => {
                       }
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyCode(code.code)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyCode(code.code)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        {code.status === 'unused' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteCode(code.id)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

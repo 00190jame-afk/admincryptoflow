@@ -240,7 +240,9 @@
     "copy": "复制",
     "copied": "充值码已复制到剪贴板",
     "loadingCodes": "加载充值码中...",
-    "noCodes": "未找到充值码"
+    "noCodes": "未找到充值码",
+    "codeDeleted": "充值码删除成功",
+    "failedDelete": "删除充值码失败"
   },
   "admin": {
     "title": "管理员管理",
