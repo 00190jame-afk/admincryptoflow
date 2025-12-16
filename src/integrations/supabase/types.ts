@@ -380,6 +380,7 @@ export type Database = {
           amount: number
           code: string
           created_at: string
+          created_by: string | null
           id: string
           redeemed_at: string | null
           status: string
@@ -390,6 +391,7 @@ export type Database = {
           amount: number
           code: string
           created_at?: string
+          created_by?: string | null
           id?: string
           redeemed_at?: string | null
           status?: string
@@ -400,6 +402,7 @@ export type Database = {
           amount?: number
           code?: string
           created_at?: string
+          created_by?: string | null
           id?: string
           redeemed_at?: string | null
           status?: string
