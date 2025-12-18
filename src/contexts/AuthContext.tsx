@@ -33,31 +33,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
     try {
-      // Prefer server-side role checks (avoids any client-side RLS edge cases)
-      const [{ data: anyAdmin, error: anyAdminError }, { data: superAdmin, error: superAdminError }] =
-        await Promise.all([
-          supabase.rpc('is_any_admin'),
-          supabase.rpc('is_super_admin'),
-        ]);
-
-      // If there's an error and we haven't retried yet, wait and retry.
-      // This handles the case where auth state isn't fully synced yet.
-      const firstError = anyAdminError ?? superAdminError;
-      if (firstError && retryCount < 2) {
-        console.log('Admin check failed, retrying...', firstError.message);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      const { data: adminProfile, error } = await supabase
+        .from('admin_profiles')
+        .select('role, is_active')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      // If there's an error and we haven't retried yet, wait and retry
+      // This handles the case where auth state isn't synced yet
+      if (error && retryCount < 2) {
+        console.log('Admin check failed, retrying...', error.message);
+        await new Promise(resolve => setTimeout(resolve, 500));
         return checkAdminStatus(userId, retryCount + 1);
       }
-
-      if (firstError) {
-        console.error('Admin status check error:', firstError);
+      
+      if (error) {
+        console.error('Admin status check error:', error);
         setIsAdmin(false);
         setIsSuperAdmin(false);
         return;
       }
-
-      setIsAdmin(Boolean(anyAdmin));
-      setIsSuperAdmin(Boolean(superAdmin));
+      
+      setIsAdmin(!!adminProfile);
+      setIsSuperAdmin(adminProfile?.role === 'super_admin');
     } catch (error) {
       console.error('Admin status check exception:', error);
       setIsAdmin(false);
