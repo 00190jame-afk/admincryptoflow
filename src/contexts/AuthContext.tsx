@@ -31,18 +31,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const checkAdminStatus = async (userId: string) => {
+  const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
     try {
-      const { data: adminProfile } = await supabase
+      const { data: adminProfile, error } = await supabase
         .from('admin_profiles')
         .select('role, is_active')
         .eq('user_id', userId)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
+      
+      // If there's an error and we haven't retried yet, wait and retry
+      // This handles the case where auth state isn't synced yet
+      if (error && retryCount < 2) {
+        console.log('Admin check failed, retrying...', error.message);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return checkAdminStatus(userId, retryCount + 1);
+      }
+      
+      if (error) {
+        console.error('Admin status check error:', error);
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
+        return;
+      }
       
       setIsAdmin(!!adminProfile);
       setIsSuperAdmin(adminProfile?.role === 'super_admin');
     } catch (error) {
+      console.error('Admin status check exception:', error);
       setIsAdmin(false);
       setIsSuperAdmin(false);
     }
