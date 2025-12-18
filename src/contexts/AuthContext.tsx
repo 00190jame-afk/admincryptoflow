@@ -40,6 +40,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
       
       if (adminResult.error || superAdminResult.error) {
+        const errorMessage = adminResult.error?.message || superAdminResult.error?.message || '';
+        
+        // Check if error is auth-related (stale/invalid session)
+        if (errorMessage.toLowerCase().includes('jwt') || 
+            errorMessage.toLowerCase().includes('token') || 
+            errorMessage.toLowerCase().includes('auth') ||
+            errorMessage.toLowerCase().includes('invalid')) {
+          console.log('Stale session detected, clearing auth state...');
+          // Session is stale, clear it completely
+          setUser(null);
+          setSession(null);
+          setIsAdmin(false);
+          setIsSuperAdmin(false);
+          await supabase.auth.signOut();
+          return;
+        }
+        
         // If first attempt fails and we haven't retried, wait and retry
         if (retryCount < 2) {
           await new Promise(resolve => setTimeout(resolve, 500));
