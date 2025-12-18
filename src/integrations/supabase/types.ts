@@ -326,6 +326,7 @@ export type Database = {
           is_verified: boolean | null
           last_name: string | null
           phone: string | null
+          registered_with_invite_code_id: string | null
           role: string | null
           updated_at: string
           user_agent: string | null
@@ -346,6 +347,7 @@ export type Database = {
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
+          registered_with_invite_code_id?: string | null
           role?: string | null
           updated_at?: string
           user_agent?: string | null
@@ -366,6 +368,7 @@ export type Database = {
           is_verified?: boolean | null
           last_name?: string | null
           phone?: string | null
+          registered_with_invite_code_id?: string | null
           role?: string | null
           updated_at?: string
           user_agent?: string | null
@@ -373,7 +376,15 @@ export type Database = {
           username?: string | null
           wallet_address?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_registered_with_invite_code_id_fkey"
+            columns: ["registered_with_invite_code_id"]
+            isOneToOne: false
+            referencedRelation: "invite_codes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recharge_codes: {
         Row: {
