@@ -31,18 +31,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const checkAdminStatus = async (userId: string) => {
+  const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
     try {
-      const { data: adminProfile } = await supabase
-        .from('admin_profiles')
-        .select('role, is_active')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
+      // Use RPC functions instead of direct table queries - more reliable with auth state
+      const [adminResult, superAdminResult] = await Promise.all([
+        supabase.rpc('is_any_admin'),
+        supabase.rpc('is_super_admin')
+      ]);
       
-      setIsAdmin(!!adminProfile);
-      setIsSuperAdmin(adminProfile?.role === 'super_admin');
+      if (adminResult.error || superAdminResult.error) {
+        // If first attempt fails and we haven't retried, wait and retry
+        if (retryCount < 2) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return checkAdminStatus(userId, retryCount + 1);
+        }
+        console.error('Admin status check failed after retries:', adminResult.error || superAdminResult.error);
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
+        return;
+      }
+      
+      setIsAdmin(adminResult.data === true);
+      setIsSuperAdmin(superAdminResult.data === true);
     } catch (error) {
+      console.error('Admin status check error:', error);
       setIsAdmin(false);
       setIsSuperAdmin(false);
     }
@@ -69,24 +81,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
     let initialLoadComplete = false;
 
-    // Check for existing session first
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (!mounted) return;
         
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await checkAdminStatus(session.user.id);
+        // If session error or invalid token, try to refresh
+        if (sessionError || (session && !session.access_token)) {
+          console.log('Session invalid, attempting refresh...');
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData.session) {
+            setSession(refreshData.session);
+            setUser(refreshData.session.user);
+            await checkAdminStatus(refreshData.session.user.id);
+          } else {
+            setSession(null);
+            setUser(null);
+            setIsAdmin(false);
+            setIsSuperAdmin(false);
+          }
         } else {
-          setIsAdmin(false);
-          setIsSuperAdmin(false);
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            await checkAdminStatus(session.user.id);
+          } else {
+            setIsAdmin(false);
+            setIsSuperAdmin(false);
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
       } finally {
         if (mounted) {
           initialLoadComplete = true;
