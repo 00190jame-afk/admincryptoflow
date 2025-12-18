@@ -66,39 +66,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    let mounted = true;
+    let initialLoadComplete = false;
+
+    // Check for existing session first
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check admin status BEFORE setting loading to false
           await checkAdminStatus(session.user.id);
-          setLoading(false);
         } else {
           setIsAdmin(false);
           setIsSuperAdmin(false);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        if (mounted) {
+          initialLoadComplete = true;
           setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Set up auth state listener for subsequent changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        
+        // Skip if this is the initial session and we haven't completed init yet
+        if (event === 'INITIAL_SESSION' && !initialLoadComplete) {
+          return;
+        }
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await checkAdminStatus(session.user.id);
+        } else {
+          setIsAdmin(false);
+          setIsSuperAdmin(false);
         }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Check admin status BEFORE setting loading to false
-        await checkAdminStatus(session.user.id);
-        setLoading(false);
-      } else {
+    // Safety timeout - ensure loading is set to false after 5 seconds max
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && !initialLoadComplete) {
+        console.warn('Auth initialization timeout - forcing loading complete');
         setLoading(false);
       }
-    });
+    }, 5000);
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   // Auto-refresh session every 10 minutes to prevent stale tokens
