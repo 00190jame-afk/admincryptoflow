@@ -11,6 +11,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  refreshSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +31,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+  const checkAdminStatus = async (userId: string) => {
+    try {
+      const { data: adminProfile } = await supabase
+        .from('admin_profiles')
+        .select('role, is_active')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .single();
+      
+      setIsAdmin(!!adminProfile);
+      setIsSuperAdmin(adminProfile?.role === 'super_admin');
+    } catch (error) {
+      setIsAdmin(false);
+      setIsSuperAdmin(false);
+    }
+  };
+
+  // Refresh session - returns true if successful
+  const refreshSession = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error || !data.session) {
+        console.error('Session refresh failed:', error);
+        return false;
+      }
+      setSession(data.session);
+      setUser(data.session.user);
+      return true;
+    } catch (error) {
+      console.error('Session refresh error:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -38,61 +73,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check admin status
-          setTimeout(async () => {
-            try {
-              const { data: adminProfile } = await supabase
-                .from('admin_profiles')
-                .select('role, is_active')
-                .eq('user_id', session.user.id)
-                .eq('is_active', true)
-                .single();
-              
-              setIsAdmin(!!adminProfile);
-              setIsSuperAdmin(adminProfile?.role === 'super_admin');
-            } catch (error) {
-              setIsAdmin(false);
-              setIsSuperAdmin(false);
-            }
-          }, 0);
+          // Check admin status BEFORE setting loading to false
+          await checkAdminStatus(session.user.id);
+          setLoading(false);
         } else {
           setIsAdmin(false);
           setIsSuperAdmin(false);
+          setLoading(false);
         }
-        
-        setLoading(false);
       }
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        setTimeout(async () => {
-          try {
-            const { data: adminProfile } = await supabase
-              .from('admin_profiles')
-              .select('role, is_active')
-              .eq('user_id', session.user.id)
-              .eq('is_active', true)
-              .single();
-            
-            setIsAdmin(!!adminProfile);
-            setIsSuperAdmin(adminProfile?.role === 'super_admin');
-          } catch (error) {
-            setIsAdmin(false);
-            setIsSuperAdmin(false);
-          }
-          setLoading(false);
-        }, 0);
+        // Check admin status BEFORE setting loading to false
+        await checkAdminStatus(session.user.id);
+        setLoading(false);
       } else {
         setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Auto-refresh session every 10 minutes to prevent stale tokens
+  useEffect(() => {
+    const refreshInterval = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.refreshSession();
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -141,6 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     isAdmin,
     isSuperAdmin,
+    refreshSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
