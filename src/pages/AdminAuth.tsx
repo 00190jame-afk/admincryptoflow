@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 const AdminAuth = () => {
   const { t } = useTranslation();
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, isAdmin, signOut } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -31,8 +31,39 @@ const AdminAuth = () => {
     );
   }
 
-  if (user) {
+  // Only auto-forward to /admin if the logged-in user is actually an admin.
+  if (user && isAdmin) {
     return <Navigate to="/admin" replace />;
+  }
+
+  // If a user is logged in but not an admin, keep them here and let them switch accounts.
+  if (user && !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+              <Shield className="h-6 w-6 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl">{t('auth.title')}</CardTitle>
+            <CardDescription>
+              This account doesn’t have admin access. Please sign out and log in with an admin account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              onClick={async () => {
+                await signOut();
+                window.location.href = '/auth';
+              }}
+            >
+              Switch Account
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
