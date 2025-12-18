@@ -31,34 +31,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
+  const checkAdminStatus = async (userId: string) => {
     try {
-      const { data: adminProfile, error } = await supabase
+      const { data: adminProfile } = await supabase
         .from('admin_profiles')
         .select('role, is_active')
         .eq('user_id', userId)
         .eq('is_active', true)
-        .maybeSingle();
-      
-      // If there's an error and we haven't retried yet, wait and retry
-      // This handles the case where auth state isn't synced yet
-      if (error && retryCount < 2) {
-        console.log('Admin check failed, retrying...', error.message);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return checkAdminStatus(userId, retryCount + 1);
-      }
-      
-      if (error) {
-        console.error('Admin status check error:', error);
-        setIsAdmin(false);
-        setIsSuperAdmin(false);
-        return;
-      }
+        .single();
       
       setIsAdmin(!!adminProfile);
       setIsSuperAdmin(adminProfile?.role === 'super_admin');
     } catch (error) {
-      console.error('Admin status check exception:', error);
       setIsAdmin(false);
       setIsSuperAdmin(false);
     }
@@ -82,72 +66,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    let mounted = true;
-    let initialLoadComplete = false;
-
-    // Check for existing session first
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!mounted) return;
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await checkAdminStatus(session.user.id);
-        } else {
-          setIsAdmin(false);
-          setIsSuperAdmin(false);
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-      } finally {
-        if (mounted) {
-          initialLoadComplete = true;
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Set up auth state listener for subsequent changes
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
-        
-        // Skip if this is the initial session and we haven't completed init yet
-        if (event === 'INITIAL_SESSION' && !initialLoadComplete) {
-          return;
-        }
-        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          // Check admin status BEFORE setting loading to false
           await checkAdminStatus(session.user.id);
+          setLoading(false);
         } else {
           setIsAdmin(false);
           setIsSuperAdmin(false);
+          setLoading(false);
         }
       }
     );
 
-    // Safety timeout - ensure loading is set to false after 5 seconds max
-    const safetyTimeout = setTimeout(() => {
-      if (mounted && !initialLoadComplete) {
-        console.warn('Auth initialization timeout - forcing loading complete');
+    // Check for existing session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Check admin status BEFORE setting loading to false
+        await checkAdminStatus(session.user.id);
+        setLoading(false);
+      } else {
         setLoading(false);
       }
-    }, 5000);
+    });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   // Auto-refresh session every 10 minutes to prevent stale tokens
