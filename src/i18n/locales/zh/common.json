@@ -301,5 +301,33 @@
     "failedDelete": "删除交易规则失败",
     "loadingRules": "加载交易规则中...",
     "noRules": "未找到交易规则"
+  },
+  "notifications": {
+    "title": "通知",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "newTrades": "新交易",
+    "withdrawals": "提款",
+    "messages": "消息",
+    "newUsers": "新用户",
+    "rechargeCodes": "充值码",
+    "balanceChanges": "余额变动",
+    "clear": "清除",
+    "volume": "音量",
+    "testSound": "测试声音"
+  },
+  "auth": {
+    "title": "加密流管理后台",
+    "description": "登录以访问管理面板",
+    "signIn": "登录",
+    "register": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "fullName": "姓名",
+    "emailPlaceholder": "请输入邮箱",
+    "fullNamePlaceholder": "请输入姓名",
+    "inviteCodePlaceholder": "请输入管理员邀请码",
+    "adminInviteCode": "管理员邀请码",
+    "registrationSuccess": "注册成功！请检查您的邮箱以验证账户。"
   }
 }

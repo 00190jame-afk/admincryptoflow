@@ -301,5 +301,33 @@
     "failedDelete": "Failed to delete trade rule",
     "loadingRules": "Loading trade rules...",
     "noRules": "No trade rules found"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "newTrades": "New Trades",
+    "withdrawals": "Withdrawals",
+    "messages": "Messages",
+    "newUsers": "New Users",
+    "rechargeCodes": "Recharge Codes",
+    "balanceChanges": "Balance Changes",
+    "clear": "Clear",
+    "volume": "Volume",
+    "testSound": "Test sound"
+  },
+  "auth": {
+    "title": "Crypto Flow Admin",
+    "description": "Sign in to access the admin panel",
+    "signIn": "Sign In",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "fullName": "Full Name",
+    "emailPlaceholder": "Enter your email",
+    "fullNamePlaceholder": "Enter your full name",
+    "inviteCodePlaceholder": "Enter admin invite code",
+    "adminInviteCode": "Admin Invite Code",
+    "registrationSuccess": "Registration successful! Please check your email to verify your account."
   }
 }

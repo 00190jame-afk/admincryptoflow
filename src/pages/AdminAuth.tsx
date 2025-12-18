@@ -8,8 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Shield, Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const AdminAuth = () => {
+  const { t } = useTranslation();
   const { user, loading, signIn, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,7 +61,7 @@ const AdminAuth = () => {
     if (error) {
       setError(error.message);
     } else {
-      setMessage('Registration successful! Please check your email to verify your account.');
+      setMessage(t('auth.registrationSuccess'));
     }
     setIsLoading(false);
   };
@@ -71,33 +73,33 @@ const AdminAuth = () => {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
             <Shield className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">Crypto Flow Admin</CardTitle>
+          <CardTitle className="text-2xl">{t('auth.title')}</CardTitle>
           <CardDescription>
-            Sign in to access the admin panel
+            {t('auth.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Register</TabsTrigger>
+              <TabsTrigger value="signin">{t('auth.signIn')}</TabsTrigger>
+              <TabsTrigger value="signup">{t('auth.register')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('auth.email')}</Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder={t('auth.emailPlaceholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('auth.password')}</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -122,7 +124,7 @@ const AdminAuth = () => {
                 )}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In
+                  {t('auth.signIn')}
                 </Button>
               </form>
             </TabsContent>
@@ -130,29 +132,29 @@ const AdminAuth = () => {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
+                  <Label htmlFor="fullName">{t('auth.fullName')}</Label>
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="Enter your full name"
+                    placeholder={t('auth.fullNamePlaceholder')}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signupEmail">Email</Label>
+                  <Label htmlFor="signupEmail">{t('auth.email')}</Label>
                   <Input
                     id="signupEmail"
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder={t('auth.emailPlaceholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signupPassword">Password</Label>
+                  <Label htmlFor="signupPassword">{t('auth.password')}</Label>
                   <div className="relative">
                     <Input
                       id="signupPassword"
@@ -171,11 +173,11 @@ const AdminAuth = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="inviteCode">Admin Invite Code</Label>
+                  <Label htmlFor="inviteCode">{t('auth.adminInviteCode')}</Label>
                   <Input
                     id="inviteCode"
                     type="text"
-                    placeholder="Enter admin invite code"
+                    placeholder={t('auth.inviteCodePlaceholder')}
                     value={adminInviteCode}
                     onChange={(e) => setAdminInviteCode(e.target.value)}
                     required
@@ -193,7 +195,7 @@ const AdminAuth = () => {
                 )}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Register
+                  {t('auth.register')}
                 </Button>
               </form>
             </TabsContent>
