@@ -7,17 +7,19 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useNotifications } from '@/contexts/NotificationContext';
 import { Separator } from '@/components/ui/separator';
 import { notificationAudio } from '@/lib/NotificationAudio';
+import { useTranslation } from 'react-i18next';
 
 const notificationItems = [
-  { key: 'trades' as const, label: 'New Trades' },
-  { key: 'withdrawals' as const, label: 'Withdrawals' },
-  { key: 'messages' as const, label: 'Messages' },
-  { key: 'users' as const, label: 'New Users' },
-  { key: 'rechargeCodes' as const, label: 'Recharge Codes' },
-  { key: 'balanceChanges' as const, label: 'Balance Changes' },
+  { key: 'trades' as const, labelKey: 'notifications.newTrades' },
+  { key: 'withdrawals' as const, labelKey: 'notifications.withdrawals' },
+  { key: 'messages' as const, labelKey: 'notifications.messages' },
+  { key: 'users' as const, labelKey: 'notifications.newUsers' },
+  { key: 'rechargeCodes' as const, labelKey: 'notifications.rechargeCodes' },
+  { key: 'balanceChanges' as const, labelKey: 'notifications.balanceChanges' },
 ];
 
 export const NotificationControls = () => {
+  const { t } = useTranslation();
   const { counts, isEnabled, volume, setEnabled, setVolume, markAsRead } = useNotifications();
 
   const totalCount = Object.values(counts).reduce((sum, count) => sum + count, 0);
@@ -40,7 +42,7 @@ export const NotificationControls = () => {
       <PopoverContent className="w-80" align="end">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium">Notifications</h4>
+            <h4 className="font-medium">{t('notifications.title')}</h4>
             <Button
               variant="ghost"
               size="sm"
@@ -48,7 +50,7 @@ export const NotificationControls = () => {
               className="text-xs"
             >
               {isEnabled ? <Bell className="h-3 w-3 mr-1" /> : <BellOff className="h-3 w-3 mr-1" />}
-              {isEnabled ? 'Enabled' : 'Disabled'}
+              {isEnabled ? t('notifications.enabled') : t('notifications.disabled')}
             </Button>
           </div>
 
@@ -57,7 +59,7 @@ export const NotificationControls = () => {
           <div className="space-y-3">
             {notificationItems.map((item) => (
               <div key={item.key} className="flex items-center justify-between">
-                <span className="text-sm">{item.label}</span>
+                <span className="text-sm">{t(item.labelKey)}</span>
                 <div className="flex items-center gap-2">
                   {counts[item.key] > 0 && (
                     <Badge variant="secondary">{counts[item.key]}</Badge>
@@ -68,7 +70,7 @@ export const NotificationControls = () => {
                     onClick={() => markAsRead(item.key)}
                     className="text-xs h-6 px-2"
                   >
-                    Clear
+                    {t('notifications.clear')}
                   </Button>
                 </div>
               </div>
@@ -81,7 +83,7 @@ export const NotificationControls = () => {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   {volume > 0 ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                  <span className="text-sm">Volume</span>
+                  <span className="text-sm">{t('notifications.volume')}</span>
                 </div>
                 <Slider
                   value={[volume]}
@@ -93,7 +95,7 @@ export const NotificationControls = () => {
                 />
                 <div className="flex justify-end">
                   <Button variant="outline" size="sm" onClick={() => notificationAudio.play()}>
-                    Test sound
+                    {t('notifications.testSound')}
                   </Button>
                 </div>
               </div>

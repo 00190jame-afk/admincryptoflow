@@ -422,7 +422,7 @@ const RechargeCodeManagement = () => {
                         {newCodeIds.has(code.id) && (
                           <Badge variant="destructive" className="text-xs animate-bounce">
                             <Sparkles className="h-3 w-3 mr-1" />
-                            NEW
+                            {t('common.new')}
                           </Badge>
                         )}
                         <Button
