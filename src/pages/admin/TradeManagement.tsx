@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Trade {
   id: string;
@@ -36,6 +37,7 @@ const TradeManagement = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { markAsRead } = useNotifications();
+  const { refreshSession } = useAuth();
   const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,15 +102,59 @@ const TradeManagement = () => {
     toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
 
     try {
+      // Refresh session before calling edge function to ensure fresh token
+      const sessionRefreshed = await refreshSession();
+      if (!sessionRefreshed) {
+        toast({ 
+          title: 'Session Expired', 
+          description: 'Please log out and log back in to refresh your session.',
+          variant: 'destructive' 
+        });
+        fetchTrades();
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('set-trade-win', { body: { tradeId } });
+      
       if (error || data?.error) {
-        toast({ title: t('common.error'), description: error?.message || data?.error, variant: 'destructive' });
+        const errorMessage = error?.message || data?.error;
+        
+        // Check for session-related errors
+        if (errorMessage?.toLowerCase().includes('invalid user token') || 
+            errorMessage?.toLowerCase().includes('session') ||
+            errorMessage?.toLowerCase().includes('authorization') ||
+            errorMessage?.toLowerCase().includes('unauthorized')) {
+          toast({ 
+            title: 'Session Expired', 
+            description: 'Please log out and log back in to refresh your session.',
+            variant: 'destructive' 
+          });
+        } else {
+          toast({ 
+            title: t('common.error'), 
+            description: errorMessage || 'An error occurred', 
+            variant: 'destructive' 
+          });
+        }
         fetchTrades();
         return;
       }
       toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
-    } catch (error) {
-      toast({ title: t('common.error'), description: 'An unexpected error occurred', variant: 'destructive' });
+    } catch (error: any) {
+      const errorMessage = error?.message || 'An unexpected error occurred';
+      
+      // Check for session-related errors in catch block too
+      if (errorMessage?.toLowerCase().includes('invalid user token') || 
+          errorMessage?.toLowerCase().includes('session') ||
+          errorMessage?.toLowerCase().includes('failed to send')) {
+        toast({ 
+          title: 'Session Expired', 
+          description: 'Please log out and log back in to refresh your session.',
+          variant: 'destructive' 
+        });
+      } else {
+        toast({ title: t('common.error'), description: errorMessage, variant: 'destructive' });
+      }
       fetchTrades();
     }
   };
