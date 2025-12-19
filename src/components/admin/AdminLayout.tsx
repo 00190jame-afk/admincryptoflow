@@ -9,7 +9,7 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Button } from '@/components/ui/button';
 
 const AdminLayout = () => {
-  const { user, loading, isAdmin, signOut } = useAuth();
+  const { user, loading, isAdmin, signOut, adminStatusChecking } = useAuth();
   const navigate = useNavigate();
 
   const handleSwitchAccount = async () => {
@@ -17,7 +17,8 @@ const AdminLayout = () => {
     navigate('/auth');
   };
 
-  if (loading) {
+  // Show loading while auth OR admin status is being checked
+  if (loading || adminStatusChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

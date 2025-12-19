@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  adminStatusChecking: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, metadata?: any) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -28,10 +29,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminStatusChecking, setAdminStatusChecking] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
+    setAdminStatusChecking(true);
     try {
       // Use RPC functions instead of direct table queries - more reliable with auth state
       const [adminResult, superAdminResult] = await Promise.all([
@@ -74,6 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Admin status check error:', error);
       setIsAdmin(false);
       setIsSuperAdmin(false);
+    } finally {
+      setAdminStatusChecking(false);
     }
   };
 
@@ -233,6 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     session,
     loading,
+    adminStatusChecking,
     signIn,
     signUp,
     signOut,
