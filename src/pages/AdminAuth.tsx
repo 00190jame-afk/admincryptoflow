@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 const AdminAuth = () => {
   const { t } = useTranslation();
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, adminStatusChecking, isAdmin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -23,7 +23,8 @@ const AdminAuth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
 
-  if (loading) {
+  // Show loading while auth OR admin status is being checked
+  if (loading || adminStatusChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -31,7 +32,8 @@ const AdminAuth = () => {
     );
   }
 
-  if (user) {
+  // Only redirect if user is logged in AND confirmed as admin
+  if (user && isAdmin) {
     return <Navigate to="/admin" replace />;
   }
 
