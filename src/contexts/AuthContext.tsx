@@ -33,39 +33,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const checkAdminStatus = async (userId: string, retryCount = 0): Promise<void> => {
+  const checkAdminStatus = async (userId: string): Promise<void> => {
     setAdminStatusChecking(true);
     try {
-      // Use RPC functions instead of direct table queries - more reliable with auth state
       const [adminResult, superAdminResult] = await Promise.all([
         supabase.rpc('is_any_admin'),
         supabase.rpc('is_super_admin')
       ]);
       
       if (adminResult.error || superAdminResult.error) {
-        const errorMessage = adminResult.error?.message || superAdminResult.error?.message || '';
-        
-        // Check if error is auth-related (stale/invalid session)
-        if (errorMessage.toLowerCase().includes('jwt') || 
-            errorMessage.toLowerCase().includes('token') || 
-            errorMessage.toLowerCase().includes('auth') ||
-            errorMessage.toLowerCase().includes('invalid')) {
-          console.log('Stale session detected, clearing auth state...');
-          // Session is stale, clear it completely
-          setUser(null);
-          setSession(null);
-          setIsAdmin(false);
-          setIsSuperAdmin(false);
-          await supabase.auth.signOut();
-          return;
-        }
-        
-        // If first attempt fails and we haven't retried, wait and retry
-        if (retryCount < 2) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          return checkAdminStatus(userId, retryCount + 1);
-        }
-        console.error('Admin status check failed after retries:', adminResult.error || superAdminResult.error);
+        console.error('Admin check error:', adminResult.error || superAdminResult.error);
         setIsAdmin(false);
         setIsSuperAdmin(false);
         return;
