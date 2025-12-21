@@ -34,27 +34,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const checkAdminStatus = async (userId: string): Promise<void> => {
+    console.log('[Auth] Starting admin status check for user:', userId);
     setAdminStatusChecking(true);
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise<{ timeout: true }>((resolve) => {
+      setTimeout(() => resolve({ timeout: true }), 5000);
+    });
+    
     try {
-      const [adminResult, superAdminResult] = await Promise.all([
+      // Race between RPC calls and timeout
+      const rpcPromise = Promise.all([
         supabase.rpc('is_any_admin'),
         supabase.rpc('is_super_admin')
       ]);
       
-      if (adminResult.error || superAdminResult.error) {
-        console.error('Admin check error:', adminResult.error || superAdminResult.error);
+      const result = await Promise.race([rpcPromise, timeoutPromise]);
+      
+      if ('timeout' in result) {
+        console.error('[Auth] Admin check timed out after 5 seconds');
         setIsAdmin(false);
         setIsSuperAdmin(false);
         return;
       }
       
-      setIsAdmin(adminResult.data === true);
-      setIsSuperAdmin(superAdminResult.data === true);
+      const [adminResult, superAdminResult] = result;
+      console.log('[Auth] RPC results:', { adminResult, superAdminResult });
+      
+      if (adminResult.error || superAdminResult.error) {
+        console.error('[Auth] Admin check error:', adminResult.error || superAdminResult.error);
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
+        return;
+      }
+      
+      const adminStatus = adminResult.data === true;
+      const superAdminStatus = superAdminResult.data === true;
+      
+      console.log('[Auth] Setting admin status:', { isAdmin: adminStatus, isSuperAdmin: superAdminStatus });
+      setIsAdmin(adminStatus);
+      setIsSuperAdmin(superAdminStatus);
     } catch (error) {
-      console.error('Admin status check error:', error);
+      console.error('[Auth] Admin status check error:', error);
       setIsAdmin(false);
       setIsSuperAdmin(false);
     } finally {
+      console.log('[Auth] Admin status check complete');
       setAdminStatusChecking(false);
     }
   };
