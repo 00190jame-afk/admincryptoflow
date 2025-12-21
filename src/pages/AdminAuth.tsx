@@ -22,21 +22,10 @@ const AdminAuth = () => {
   const [message, setMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [checkTimeout, setCheckTimeout] = useState(false);
 
-  // Safety timeout - if admin check takes too long, stop waiting
-  useEffect(() => {
-    if (adminStatusChecking) {
-      setCheckTimeout(false);
-      const timer = setTimeout(() => {
-        setCheckTimeout(true);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [adminStatusChecking]);
-
-  // Show loading while auth is loading (but not forever for admin check)
-  if (loading || (adminStatusChecking && !checkTimeout)) {
+  // Show loading while auth is loading or checking admin status
+  // Timeout is now handled in AuthContext, so we just check the flags
+  if (loading || adminStatusChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
