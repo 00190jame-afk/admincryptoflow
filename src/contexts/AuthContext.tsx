@@ -103,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
-    let initialLoadComplete = false;
 
     const initializeAuth = async () => {
       try {
@@ -111,14 +110,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (!mounted) return;
         
+        console.log('[Auth] Session recovered from storage:', !!session);
+        
         // If session error or invalid token, try to refresh
         if (sessionError || (session && !session.access_token)) {
-          console.log('Session invalid, attempting refresh...');
+          console.log('[Auth] Session invalid, attempting refresh...');
           const { data: refreshData } = await supabase.auth.refreshSession();
           if (refreshData.session) {
             setSession(refreshData.session);
             setUser(refreshData.session.user);
-            await checkAdminStatus(refreshData.session.user.id);
+            // Defer admin check to avoid blocking
+            setTimeout(() => {
+              if (mounted) checkAdminStatus(refreshData.session.user.id);
+            }, 0);
           } else {
             setSession(null);
             setUser(null);
@@ -129,20 +133,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(session);
           setUser(session?.user ?? null);
           
+          // Defer admin check to avoid blocking
           if (session?.user) {
-            await checkAdminStatus(session.user.id);
+            setTimeout(() => {
+              if (mounted) checkAdminStatus(session.user.id);
+            }, 0);
           } else {
             setIsAdmin(false);
             setIsSuperAdmin(false);
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('[Auth] Auth initialization error:', error);
         setIsAdmin(false);
         setIsSuperAdmin(false);
       } finally {
         if (mounted) {
-          initialLoadComplete = true;
           setLoading(false);
         }
       }
@@ -150,21 +156,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth();
 
-    // Set up auth state listener for subsequent changes
+    // Set up auth state listener - MUST be synchronous, no async/await!
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!mounted) return;
         
-        // Skip if this is the initial session and we haven't completed init yet
-        if (event === 'INITIAL_SESSION' && !initialLoadComplete) {
-          return;
-        }
+        console.log('[Auth] Auth state changed:', event);
         
+        // Synchronous state updates only
         setSession(session);
         setUser(session?.user ?? null);
         
+        // Defer admin check with setTimeout(0) to avoid blocking Supabase's auth flow
         if (session?.user) {
-          await checkAdminStatus(session.user.id);
+          setTimeout(() => {
+            if (mounted) checkAdminStatus(session.user.id);
+          }, 0);
         } else {
           setIsAdmin(false);
           setIsSuperAdmin(false);
@@ -172,18 +179,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Safety timeout - ensure loading is set to false after 5 seconds max
-    const safetyTimeout = setTimeout(() => {
-      if (mounted && !initialLoadComplete) {
-        console.warn('Auth initialization timeout - forcing loading complete');
-        setLoading(false);
-      }
-    }, 5000);
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
     };
   }, []);
 
