@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAdminTrades, Trade } from '@/hooks/admin/useAdminData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -12,97 +14,51 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/contexts/AuthContext';
-
-interface Trade {
-  id: string;
-  user_id: string;
-  email: string;
-  trading_pair: string;
-  direction: string;
-  stake_amount: number;
-  leverage: number;
-  entry_price: number;
-  current_price?: number;
-  status: string;
-  result?: string;
-  profit_loss_amount?: number;
-  created_at: string;
-  ends_at?: string;
-  completed_at?: string;
-}
 
 const TradeManagement = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { markAsRead } = useNotifications();
   const { refreshSession } = useAuth();
-  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
+  const { data: trades = [], isLoading } = useAdminTrades();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [updating, setUpdating] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
   const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
 
+  // Mark as read on mount
   useEffect(() => {
-    if (adminLoading) return;
-    fetchTrades();
     markAsRead('trades');
+  }, [markAsRead]);
 
-    const tradesChannel = supabase
-      .channel('trades-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades' }, (payload) => {
-        setTrades((prev) => [payload.new as Trade, ...prev]);
-        setNewTradeIds((prev) => new Set([...prev, payload.new.id]));
-        setTimeout(() => {
-          setNewTradeIds((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(payload.new.id);
-            return newSet;
-          });
-        }, 30000);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trades' }, (payload) => {
-        setTrades((prev) => prev.map((trade) => trade.id === payload.new.id ? payload.new as Trade : trade));
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(tradesChannel); };
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
-
-  const fetchTrades = async () => {
-    try {
-      if (!isSuperAdmin && assignedUserIds.length === 0) {
-        setTrades([]);
-        setLoading(false);
-        return;
-      }
-
-      let query = supabase.from('trades').select('*');
-      if (!isSuperAdmin && assignedUserIds.length > 0) {
-        query = query.in('user_id', assignedUserIds);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
-      if (error) throw error;
-      setTrades(data || []);
-    } catch (error) {
-      console.error('Error fetching trades:', error);
-    } finally {
-      setLoading(false);
+  // Track new trades from real-time updates
+  useEffect(() => {
+    const previousTrades = queryClient.getQueryData<Trade[]>(['admin', 'trades']) || [];
+    const newIds = trades
+      .filter(t => !previousTrades.find(pt => pt.id === t.id))
+      .map(t => t.id);
+    
+    if (newIds.length > 0) {
+      setNewTradeIds(prev => new Set([...prev, ...newIds]));
+      setTimeout(() => {
+        setNewTradeIds(prev => {
+          const newSet = new Set(prev);
+          newIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+      }, 30000);
     }
-  };
+  }, [trades, queryClient]);
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
     setDialogOpen(null);
-    setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
     toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
 
     try {
-      // Refresh session before calling edge function to ensure fresh token
       const sessionRefreshed = await refreshSession();
       if (!sessionRefreshed) {
         toast({ 
@@ -110,7 +66,6 @@ const TradeManagement = () => {
           description: 'Please log out and log back in to refresh your session.',
           variant: 'destructive' 
         });
-        fetchTrades();
         return;
       }
 
@@ -119,7 +74,6 @@ const TradeManagement = () => {
       if (error || data?.error) {
         const errorMessage = error?.message || data?.error;
         
-        // Check for session-related errors
         if (errorMessage?.toLowerCase().includes('invalid user token') || 
             errorMessage?.toLowerCase().includes('session') ||
             errorMessage?.toLowerCase().includes('authorization') ||
@@ -136,14 +90,14 @@ const TradeManagement = () => {
             variant: 'destructive' 
           });
         }
-        fetchTrades();
         return;
       }
+      
       toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'trades'] });
     } catch (error: any) {
       const errorMessage = error?.message || 'An unexpected error occurred';
       
-      // Check for session-related errors in catch block too
       if (errorMessage?.toLowerCase().includes('invalid user token') || 
           errorMessage?.toLowerCase().includes('session') ||
           errorMessage?.toLowerCase().includes('failed to send')) {
@@ -155,7 +109,6 @@ const TradeManagement = () => {
       } else {
         toast({ title: t('common.error'), description: errorMessage, variant: 'destructive' });
       }
-      fetchTrades();
     }
   };
 
@@ -229,7 +182,7 @@ const TradeManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 <TableRow><TableCell colSpan={10} className="text-center">{t('trades.loadingTrades')}</TableCell></TableRow>
               ) : filteredTrades.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center">{t('trades.noTrades')}</TableCell></TableRow>

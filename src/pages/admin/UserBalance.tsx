@@ -1,42 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { notificationAudio } from '@/lib/NotificationAudio';
+import { useAdminBalances, useAdminUsers, UserBalance } from '@/hooks/admin/useAdminData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Wallet, Search, DollarSign, Lock, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminRole } from '@/hooks/useAdminRole';
-import { useTranslation } from 'react-i18next';
 
-interface UserBalance {
-  id: string;
-  user_id: string;
-  balance: number;
-  frozen: number;
-  on_hold: number;
-  currency: string;
-  email?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface UserProfile {
-  user_id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  credit_score?: number;
-}
-
-const UserBalance = () => {
+const UserBalancePage = () => {
   const { t } = useTranslation();
-  const [balances, setBalances] = useState<UserBalance[]>([]);
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  const { data: balances = [], isLoading } = useAdminBalances();
+  const { data: profiles = [] } = useAdminUsers();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBalance, setSelectedBalance] = useState<UserBalance | null>(null);
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
@@ -47,120 +29,33 @@ const UserBalance = () => {
     creditScore: ''
   });
   const [newBalanceIds, setNewBalanceIds] = useState<Set<string>>(new Set());
-  const { toast } = useToast();
-  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
+  // Track new balances from real-time updates
   useEffect(() => {
-    if (!adminLoading) {
-      fetchUserBalances();
-      fetchProfiles();
-      
-      // Set up real-time subscription for balance updates
-      const channel = supabase
-        .channel('user-balances-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'user_balances'
-          },
-          (payload) => {
-            // Balance change detected
-            
-            if (payload.eventType === 'INSERT') {
-              const newBalance = payload.new as UserBalance;
-              setBalances(prev => [newBalance, ...prev]);
-              setNewBalanceIds(prev => new Set([...prev, newBalance.id]));
-              notificationAudio.play();
-              
-              setTimeout(() => {
-                setNewBalanceIds(prev => {
-                  const newSet = new Set(prev);
-                  newSet.delete(newBalance.id);
-                  return newSet;
-                });
-              }, 30000);
-            } else if (payload.eventType === 'UPDATE') {
-              const updatedBalance = payload.new as UserBalance;
-              setBalances(prev => prev.map(balance => 
-                balance.id === updatedBalance.id ? updatedBalance : balance
-              ));
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+    const previousBalances = queryClient.getQueryData<UserBalance[]>(['admin', 'balances']) || [];
+    const newIds = balances
+      .filter(b => !previousBalances.find(pb => pb.id === b.id))
+      .map(b => b.id);
+    
+    if (newIds.length > 0) {
+      setNewBalanceIds(prev => new Set([...prev, ...newIds]));
+      setTimeout(() => {
+        setNewBalanceIds(prev => {
+          const newSet = new Set(prev);
+          newIds.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+      }, 30000);
     }
-  }, [adminLoading, isSuperAdmin, assignedUserIds]);
-
-  const fetchUserBalances = async () => {
-    try {
-      // Regular admin with no assigned users should see empty array
-      if (!isSuperAdmin && assignedUserIds.length === 0) {
-        setBalances([]);
-        setLoading(false);
-        return;
-      }
-
-      let query = supabase
-        .from('user_balances')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      // Filter balances for regular admins to only show assigned users
-      if (!isSuperAdmin && assignedUserIds.length > 0) {
-        query = query.in('user_id', assignedUserIds);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setBalances(data || []);
-    } catch (error) {
-      console.error('Error fetching user balances:', error);
-      toast({
-        title: t('common.error'),
-        description: t('balance.failedUpdate'),
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProfiles = async () => {
-    try {
-      let query = supabase
-        .from('profiles')
-        .select('user_id, email, first_name, last_name, credit_score');
-
-      // Filter profiles for regular admins to only show assigned users
-      if (!isSuperAdmin && assignedUserIds.length > 0) {
-        query = query.in('user_id', assignedUserIds);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
-    }
-  };
+  }, [balances, queryClient]);
 
   const performBalanceAction = async () => {
     if (!selectedBalance) return;
 
-    // Get the values from the input fields
     const newBalance = parseFloat(balanceInputs.balance) || 0;
     const newFrozen = parseFloat(balanceInputs.frozen) || 0;
     const newOnHold = parseFloat(balanceInputs.onHold) || 0;
 
-    // Validate inputs
     if (newBalance < 0 || newFrozen < 0 || newOnHold < 0) {
       toast({
         title: t('common.error'), 
@@ -181,23 +76,17 @@ const UserBalance = () => {
 
       if (error) throw error;
 
-      // Update credit score in profiles table if changed
       if (balanceInputs.creditScore !== '') {
         const newCreditScore = parseInt(balanceInputs.creditScore);
-        const { error: creditError } = await supabase
+        await supabase
           .from('profiles')
           .update({ credit_score: newCreditScore })
           .eq('user_id', selectedBalance.user_id);
         
-        if (creditError) {
-          console.error('Error updating credit score:', creditError);
-        } else {
-          // Refresh profiles to get updated credit score
-          fetchProfiles();
-        }
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       }
 
-      fetchUserBalances();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'balances'] });
       setShowAdjustmentDialog(false);
       setSelectedBalance(null);
       setBalanceInputs({ balance: '', frozen: '', onHold: '', creditScore: '' });
@@ -247,9 +136,7 @@ const UserBalance = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">{t('balance.title')}</h1>
-        <p className="text-muted-foreground">
-          {t('balance.description')}
-        </p>
+        <p className="text-muted-foreground">{t('balance.description')}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -294,9 +181,7 @@ const UserBalance = () => {
       <Card>
         <CardHeader>
           <CardTitle>{t('balance.allBalances')}</CardTitle>
-          <CardDescription>
-            {t('balance.manageBalances')}
-          </CardDescription>
+          <CardDescription>{t('balance.manageBalances')}</CardDescription>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
@@ -322,17 +207,13 @@ const UserBalance = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
-                    {t('balance.loadingBalances')}
-                  </TableCell>
+                  <TableCell colSpan={8} className="text-center">{t('balance.loadingBalances')}</TableCell>
                 </TableRow>
               ) : filteredBalances.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center">
-                    {t('balance.noBalances')}
-                  </TableCell>
+                  <TableCell colSpan={8} className="text-center">{t('balance.noBalances')}</TableCell>
                 </TableRow>
               ) : (
                 filteredBalances.map((balance) => (
@@ -345,34 +226,20 @@ const UserBalance = () => {
                         <div className="font-medium flex items-center gap-2">
                           {getUserDisplayName(balance.user_id)}
                           {newBalanceIds.has(balance.id) && (
-                            <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">
-                              NEW
-                            </span>
+                            <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-medium">NEW</span>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {getUserProfile(balance.user_id)?.email}
-                        </div>
+                        <div className="text-sm text-muted-foreground">{getUserProfile(balance.user_id)?.email}</div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <span className="font-medium">{getUserProfile(balance.user_id)?.credit_score ?? 100}</span>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      ${balance.balance.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      ${balance.frozen.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      ${balance.on_hold.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono text-sm">{balance.currency}</span>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {new Date(balance.updated_at).toLocaleString()}
-                    </TableCell>
+                    <TableCell className="font-medium">${balance.balance.toFixed(2)}</TableCell>
+                    <TableCell>${balance.frozen.toFixed(2)}</TableCell>
+                    <TableCell>${balance.on_hold.toFixed(2)}</TableCell>
+                    <TableCell><span className="font-mono text-sm">{balance.currency}</span></TableCell>
+                    <TableCell className="text-sm">{new Date(balance.updated_at).toLocaleString()}</TableCell>
                     <TableCell>
                       <Dialog open={showAdjustmentDialog && selectedBalance?.id === balance.id} onOpenChange={(open) => {
                         setShowAdjustmentDialog(open);
@@ -449,10 +316,9 @@ const UserBalance = () => {
                                   value={balanceInputs.frozen}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, frozen: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Frozen funds</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium mb-2 block">On Hold Balance</label>
+                                <label className="text-sm font-medium mb-2 block">{t('balance.onHoldBalance')}</label>
                                 <Input
                                   type="number"
                                   step="0.01"
@@ -461,10 +327,9 @@ const UserBalance = () => {
                                   value={balanceInputs.onHold}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, onHold: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Temporarily held</p>
                               </div>
                               <div>
-                                <label className="text-sm font-medium mb-2 block">Credit Score</label>
+                                <label className="text-sm font-medium mb-2 block">{t('users.creditScore')}</label>
                                 <Input
                                   type="number"
                                   step="1"
@@ -474,39 +339,12 @@ const UserBalance = () => {
                                   value={balanceInputs.creditScore}
                                   onChange={(e) => setBalanceInputs(prev => ({ ...prev, creditScore: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">User credit score</p>
                               </div>
                             </div>
-                            
-                            <div className="flex justify-end gap-2">
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button>
-                                    Update Balance
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Balance Update</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to update {getUserDisplayName(balance.user_id)}'s balance? This action will be logged for audit purposes.
-                                      <br /><br />
-                                      New values:
-                                      <br />• Available: ${parseFloat(balanceInputs.balance || '0').toFixed(2)}
-                                      <br />• Frozen: ${parseFloat(balanceInputs.frozen || '0').toFixed(2)}
-                                      <br />• On Hold: ${parseFloat(balanceInputs.onHold || '0').toFixed(2)}
-                                      <br />• Credit Score: {parseInt(balanceInputs.creditScore || '100')}
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={performBalanceAction}>
-                                      Confirm Update
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
+
+                            <Button onClick={performBalanceAction} className="w-full">
+                              {t('balance.updateBalance')}
+                            </Button>
                           </div>
                         </DialogContent>
                       </Dialog>
@@ -522,4 +360,4 @@ const UserBalance = () => {
   );
 };
 
-export default UserBalance;
+export default UserBalancePage;
