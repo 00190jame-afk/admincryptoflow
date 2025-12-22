@@ -1,195 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAdminRechargeCodes, useAdminUsers, RechargeCode } from '@/hooks/admin/useAdminData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CreditCard, Search, Plus, DollarSign, Users, Copy, Sparkles, Trash2 } from 'lucide-react';
+import { CreditCard, Search, Plus, DollarSign, Copy, Sparkles, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useNotifications } from '@/contexts/NotificationContext';
-import { useAdminRole } from '@/hooks/useAdminRole';
-import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
-
-interface RechargeCode {
-  id: string;
-  code: string;
-  amount: number;
-  status: string;
-  user_id?: string;
-  created_by?: string;
-  created_at: string;
-  redeemed_at?: string;
-  updated_at: string;
-}
-
-interface UserProfile {
-  user_id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-}
 
 const RechargeCodeManagement = () => {
   const { t } = useTranslation();
-  const [codes, setCodes] = useState<RechargeCode[]>([]);
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  const { data: codes = [], isLoading } = useAdminRechargeCodes();
+  const { data: profiles = [] } = useAdminUsers();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [newCodeAmount, setNewCodeAmount] = useState('');
   const [showNewCodeDialog, setShowNewCodeDialog] = useState(false);
   const [newCodeIds, setNewCodeIds] = useState<Set<string>>(new Set());
-  const { toast } = useToast();
-  const { markAsRead } = useNotifications();
-  const { user } = useAuth();
-  const { isSuperAdmin, assignedUserIds, loading: adminLoading } = useAdminRole();
 
+  // Track new codes from real-time updates
   useEffect(() => {
-    if (adminLoading) return;
+    const previousCodes = queryClient.getQueryData<RechargeCode[]>(['admin', 'recharge-codes']) || [];
+    const newIds = codes
+      .filter(c => !previousCodes.find(pc => pc.id === c.id))
+      .map(c => c.id);
     
-    fetchRechargeCodes();
-    fetchProfiles();
-    
-    // Set up real-time subscription for new codes
-    const codesChannel = supabase
-      .channel('recharge-codes-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'recharge_codes'
-        },
-        (payload) => {
-          // New recharge code created
-          setCodes((prevCodes) => [payload.new as RechargeCode, ...prevCodes]);
-          // Mark this code as new for highlighting
-          setNewCodeIds((prev) => new Set([...prev, payload.new.id]));
-          // Auto-remove the highlight after 30 seconds
-          setTimeout(() => {
-            setNewCodeIds((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(payload.new.id);
-              return newSet;
-            });
-          }, 30000);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'recharge_codes'
-        },
-        (payload) => {
-          // Recharge code updated
-          setCodes((prevCodes) => 
-            prevCodes.map((code) => 
-              code.id === payload.new.id ? payload.new as RechargeCode : code
-            )
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'recharge_codes'
-        },
-        (payload) => {
-          // Recharge code deleted
-          setCodes((prevCodes) => prevCodes.filter((code) => code.id !== payload.old.id));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(codesChannel);
-    };
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
-
-  const fetchRechargeCodes = async (retryCount = 0) => {
-    try {
-      let query = supabase
-        .from('recharge_codes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Filter for regular admins
-      if (!isSuperAdmin && user?.id) {
-        // Show codes created by this admin OR redeemed by assigned users
-        if (assignedUserIds.length > 0) {
-          query = query.or(`created_by.eq.${user.id},user_id.in.(${assignedUserIds.join(',')})`);
-        } else {
-          // No assigned users yet, just show codes created by this admin
-          query = query.eq('created_by', user.id);
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        // Don't log auth-related errors as real errors
-        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          return;
-        }
-        throw error;
-      }
-      
-      setCodes(data || []);
-    } catch (error) {
-      console.error('Error fetching recharge codes:', error);
-      
-      // Retry for network errors, but not auth errors
-      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        // Retrying fetch
-        setTimeout(() => fetchRechargeCodes(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-      
-      // Only show error toast for real errors, not auth issues
-      if (!error.message?.includes('JWT') && !error.message?.includes('auth')) {
-        toast({
-          title: t('common.error'),
-          description: t('recharge.failedCreate'),
-          variant: "destructive",
+    if (newIds.length > 0) {
+      setNewCodeIds(prev => new Set([...prev, ...newIds]));
+      setTimeout(() => {
+        setNewCodeIds(prev => {
+          const newSet = new Set(prev);
+          newIds.forEach(id => newSet.delete(id));
+          return newSet;
         });
-      }
-    } finally {
-      setLoading(false);
+      }, 30000);
     }
-  };
-
-  const fetchProfiles = async (retryCount = 0) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, email, first_name, last_name');
-
-      if (error) {
-        // Don't log auth-related errors as real errors
-        if (error.message?.includes('JWT') || error.message?.includes('auth')) {
-          return;
-        }
-        throw error;
-      }
-      
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
-      
-      // Retry for network errors, but not auth errors
-      if (retryCount < 2 && error.message?.includes('Failed to fetch') && !error.message?.includes('JWT')) {
-        // Retrying fetch
-        setTimeout(() => fetchProfiles(retryCount + 1), 1000 * (retryCount + 1));
-        return;
-      }
-    }
-  };
+  }, [codes, queryClient]);
 
   const createRechargeCode = async () => {
     const amount = parseFloat(newCodeAmount);
@@ -203,7 +58,6 @@ const RechargeCodeManagement = () => {
     }
 
     try {
-      // The code will be auto-generated by the database trigger
       const { error } = await supabase
         .from('recharge_codes')
         .insert([{ amount, code: '', status: 'unused', created_by: user?.id }]);
@@ -212,7 +66,7 @@ const RechargeCodeManagement = () => {
       
       setNewCodeAmount('');
       setShowNewCodeDialog(false);
-      fetchRechargeCodes();
+      queryClient.invalidateQueries({ queryKey: ['admin', 'recharge-codes'] });
       
       toast({
         title: t('common.success'),
@@ -242,9 +96,11 @@ const RechargeCodeManagement = () => {
         .from('recharge_codes')
         .delete()
         .eq('id', codeId)
-        .eq('status', 'unused'); // Safety: only delete unused codes
+        .eq('status', 'unused');
 
       if (error) throw error;
+      
+      queryClient.invalidateQueries({ queryKey: ['admin', 'recharge-codes'] });
       
       toast({
         title: t('common.success'),
@@ -281,15 +137,12 @@ const RechargeCodeManagement = () => {
   const totalAmount = codes.reduce((sum, code) => sum + code.amount, 0);
   const usedAmount = codes.filter(c => c.status === 'redeemed').reduce((sum, code) => sum + code.amount, 0);
   const unusedCount = codes.filter(c => c.status === 'unused').length;
-  const redeemedCount = codes.filter(c => c.status === 'redeemed').length;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">{t('recharge.title')}</h1>
-        <p className="text-muted-foreground">
-          {t('recharge.description')}
-        </p>
+        <p className="text-muted-foreground">{t('recharge.description')}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -345,9 +198,7 @@ const RechargeCodeManagement = () => {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{t('recharge.createNewCode')}</DialogTitle>
-                  <DialogDescription>
-                    {t('recharge.description')}
-                  </DialogDescription>
+                  <DialogDescription>{t('recharge.description')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
@@ -369,9 +220,7 @@ const RechargeCodeManagement = () => {
               </DialogContent>
             </Dialog>
           </CardTitle>
-          <CardDescription>
-            {t('recharge.manageViewCodes')}
-          </CardDescription>
+          <CardDescription>{t('recharge.manageViewCodes')}</CardDescription>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
@@ -396,17 +245,13 @@ const RechargeCodeManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">
-                    {t('recharge.loadingCodes')}
-                  </TableCell>
+                  <TableCell colSpan={7} className="text-center">{t('recharge.loadingCodes')}</TableCell>
                 </TableRow>
               ) : filteredCodes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">
-                    {t('recharge.noCodes')}
-                  </TableCell>
+                  <TableCell colSpan={7} className="text-center">{t('recharge.noCodes')}</TableCell>
                 </TableRow>
               ) : (
                 filteredCodes.map((code) => (
@@ -416,27 +261,19 @@ const RechargeCodeManagement = () => {
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                          {code.code}
-                        </code>
+                        <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{code.code}</code>
                         {newCodeIds.has(code.id) && (
                           <Badge variant="destructive" className="text-xs animate-bounce">
                             <Sparkles className="h-3 w-3 mr-1" />
                             {t('common.new')}
                           </Badge>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => copyCode(code.code)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => copyCode(code.code)}>
                           <Copy className="h-3 w-3" />
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell className="font-semibold">
-                      ${code.amount.toFixed(2)}
-                    </TableCell>
+                    <TableCell className="font-semibold">${code.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={code.status === 'unused' ? 'default' : 'secondary'}>
                         {code.status === 'unused' ? t('recharge.unused') : t('recharge.redeemed')}
@@ -446,39 +283,21 @@ const RechargeCodeManagement = () => {
                       {code.user_id ? (
                         <div>
                           <div className="font-medium">{getUserDisplayName(code.user_id)}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {getUserProfile(code.user_id)?.email}
-                          </div>
+                          <div className="text-sm text-muted-foreground">{getUserProfile(code.user_id)?.email}</div>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">
-                      {new Date(code.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {code.redeemed_at 
-                        ? new Date(code.redeemed_at).toLocaleDateString()
-                        : '-'
-                      }
-                    </TableCell>
+                    <TableCell className="text-sm">{new Date(code.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-sm">{code.redeemed_at ? new Date(code.redeemed_at).toLocaleDateString() : '-'}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyCode(code.code)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => copyCode(code.code)}>
                           <Copy className="h-4 w-4" />
                         </Button>
                         {code.status === 'unused' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteCode(code.id)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
+                          <Button variant="outline" size="sm" onClick={() => deleteCode(code.id)} className="text-red-600 hover:text-red-700">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
