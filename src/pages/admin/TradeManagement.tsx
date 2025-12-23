@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Sparkles } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Sparkles, Timer, Target } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -54,9 +54,10 @@ const TradeManagement = () => {
     }
   }, [trades, queryClient]);
 
-  const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
+  const setTradeDecision = async (tradeId: string, decision: 'win' | 'lose') => {
     setDialogOpen(null);
-    toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
+    setUpdating(tradeId);
+    toast({ title: t('common.processing'), description: `Setting trade decision as ${decision.toUpperCase()}...` });
 
     try {
       const sessionRefreshed = await refreshSession();
@@ -66,10 +67,12 @@ const TradeManagement = () => {
           description: 'Please log out and log back in to refresh your session.',
           variant: 'destructive' 
         });
+        setUpdating(null);
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('set-trade-win', { body: { tradeId } });
+      const functionName = decision === 'win' ? 'set-trade-win' : 'set-trade-loss';
+      const { data, error } = await supabase.functions.invoke(functionName, { body: { tradeId } });
       
       if (error || data?.error) {
         const errorMessage = error?.message || data?.error;
@@ -90,10 +93,14 @@ const TradeManagement = () => {
             variant: 'destructive' 
           });
         }
+        setUpdating(null);
         return;
       }
       
-      toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
+      toast({ 
+        title: t('common.success'), 
+        description: `Trade decision set to ${decision.toUpperCase()}. Will execute in 3-5 minutes.` 
+      });
       queryClient.invalidateQueries({ queryKey: ['admin', 'trades'] });
     } catch (error: any) {
       const errorMessage = error?.message || 'An unexpected error occurred';
@@ -109,6 +116,8 @@ const TradeManagement = () => {
       } else {
         toast({ title: t('common.error'), description: errorMessage, variant: 'destructive' });
       }
+    } finally {
+      setUpdating(null);
     }
   };
 
@@ -136,6 +145,28 @@ const TradeManagement = () => {
       case 'lose': return <Badge variant="destructive">{t('trades.lose')}</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const getDecisionBadge = (decision?: string) => {
+    if (!decision) return null;
+    switch (decision) {
+      case 'win': return <Badge className="bg-green-500 text-white"><Target className="h-3 w-3 mr-1" />WIN</Badge>;
+      case 'lose': return <Badge variant="destructive"><Target className="h-3 w-3 mr-1" />LOSS</Badge>;
+      default: return null;
+    }
+  };
+
+  const getTimeRemaining = (executeAt?: string) => {
+    if (!executeAt) return null;
+    const now = new Date();
+    const executeTime = new Date(executeAt);
+    const diff = executeTime.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Executing...';
+    
+    const minutes = Math.floor(diff / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    return `${minutes}m ${seconds}s`;
   };
 
   return (
@@ -176,6 +207,7 @@ const TradeManagement = () => {
                 <TableHead>{t('trades.stake')}</TableHead>
                 <TableHead>{t('trades.leverage')}</TableHead>
                 <TableHead>{t('common.status')}</TableHead>
+                <TableHead>Decision</TableHead>
                 <TableHead>{t('trades.pnl')}</TableHead>
                 <TableHead>{t('trades.created')}</TableHead>
                 <TableHead>{t('common.actions')}</TableHead>
@@ -183,9 +215,9 @@ const TradeManagement = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={10} className="text-center">{t('trades.loadingTrades')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center">{t('trades.loadingTrades')}</TableCell></TableRow>
               ) : filteredTrades.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center">{t('trades.noTrades')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center">{t('trades.noTrades')}</TableCell></TableRow>
               ) : (
                 filteredTrades.map((trade) => (
                   <TableRow key={trade.id} className={newTradeIds.has(trade.id) ? "bg-red-50 border-red-200 animate-pulse" : ""}>
@@ -213,30 +245,58 @@ const TradeManagement = () => {
                       <div className="flex items-center space-x-2">{getStatusIcon(trade.status)}{getStatusBadge(trade.status)}</div>
                     </TableCell>
                     <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getDecisionBadge(trade.decision)}
+                        {trade.execute_at && trade.status === 'pending' && (
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <Timer className="h-3 w-3 mr-1" />
+                            {getTimeRemaining(trade.execute_at)}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       {trade.profit_loss_amount ? (
                         <span className={`font-mono ${trade.profit_loss_amount > 0 ? 'text-green-600' : 'text-red-600'}`}>${trade.profit_loss_amount.toFixed(2)}</span>
                       ) : <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell>{new Date(trade.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {trade.status === 'pending' && (
+                      {trade.status === 'pending' && !trade.decision && (
                         <Dialog open={dialogOpen === trade.id} onOpenChange={(open) => setDialogOpen(open ? trade.id : null)}>
                           <DialogTrigger asChild><Button variant="outline" size="sm">{t('trades.setResult')}</Button></DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>{t('trades.setAsWin')}</DialogTitle>
-                              <DialogDescription>{t('trades.setWinDescription')}<br /><span className="font-medium">{trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}</span></DialogDescription>
+                              <DialogTitle>Set Trade Decision</DialogTitle>
+                              <DialogDescription>
+                                Set the outcome for this trade. It will execute automatically in 3-5 minutes.
+                                <br /><span className="font-medium">{trade.trading_pair} - {trade.direction.toUpperCase()} - ${trade.stake_amount.toFixed(2)}</span>
+                              </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
-                              <Alert><AlertDescription>{t('trades.permanentAction')}</AlertDescription></Alert>
-                              <div className="flex justify-center">
-                                <Button onClick={() => updateTradeResult(trade.id, 'win')} disabled={updating === trade.id} className="bg-green-600 hover:bg-green-700">
-                                  {updating === trade.id ? t('common.processing') : <><CheckCircle className="mr-2 h-4 w-4" />{t('trades.setAsWin')}</>}
+                              <Alert><AlertDescription>The trade result will appear to the user after a realistic delay of 3-5 minutes.</AlertDescription></Alert>
+                              <div className="flex justify-center gap-4">
+                                <Button 
+                                  onClick={() => setTradeDecision(trade.id, 'win')} 
+                                  disabled={updating === trade.id} 
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  {updating === trade.id ? t('common.processing') : <><CheckCircle className="mr-2 h-4 w-4" />Set Win</>}
+                                </Button>
+                                <Button 
+                                  onClick={() => setTradeDecision(trade.id, 'lose')} 
+                                  disabled={updating === trade.id} 
+                                  variant="destructive"
+                                >
+                                  {updating === trade.id ? t('common.processing') : <><XCircle className="mr-2 h-4 w-4" />Set Loss</>}
                                 </Button>
                               </div>
                             </div>
                           </DialogContent>
                         </Dialog>
+                      )}
+                      {trade.status === 'pending' && trade.decision && (
+                        <span className="text-xs text-muted-foreground">Scheduled</span>
                       )}
                     </TableCell>
                   </TableRow>
