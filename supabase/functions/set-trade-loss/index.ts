@@ -66,7 +66,7 @@ serve(async (req) => {
       throw new Error('Trade ID is required')
     }
 
-    console.log('Setting trade decision as WIN:', tradeId)
+    console.log('Setting trade decision as LOSS:', tradeId)
 
     // Get the trade first to check current status
     const { data: trade, error: tradeError } = await supabaseService
@@ -105,7 +105,7 @@ serve(async (req) => {
     const { data, error } = await supabaseService
       .from('trades')
       .update({
-        decision: 'win',
+        decision: 'lose',
         previous_status: trade.status,
         modified_by_admin: true,
       })
@@ -132,13 +132,13 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         data,
-        message: `Trade decision set to WIN. Will execute at ${data.execute_at}`
+        message: `Trade decision set to LOSS. Will execute at ${data.execute_at}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
-    console.error('Error in set-trade-win function:', error)
+    console.error('Error in set-trade-loss function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

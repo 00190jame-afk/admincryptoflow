@@ -3,5 +3,11 @@ project_id = "llvsxldpsdmhlzexioil"
 [functions.set-trade-win]
 verify_jwt = false
 
+[functions.set-trade-loss]
+verify_jwt = false
+
+[functions.execute-trades]
+verify_jwt = false
+
 [functions.track-visitor]
 verify_jwt = true

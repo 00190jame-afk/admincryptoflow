@@ -43,6 +43,9 @@ export interface Trade {
   created_at: string;
   ends_at?: string;
   completed_at?: string;
+  decision?: string;
+  previous_status?: string;
+  execute_at?: string;
 }
 
 export interface RechargeCode {
