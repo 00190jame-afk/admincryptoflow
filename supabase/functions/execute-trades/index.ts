@@ -39,18 +39,19 @@ serve(async (req) => {
 
     for (const trade of pendingTrades || []) {
       try {
-        // Determine result based on decision (default to loss if no decision)
+      // Determine result based on decision (default to loss if no decision)
         const result = trade.decision || 'lose'
         
         // Calculate profit/loss amount
+        // profit_rate is stored as percentage (e.g., 30 means 30%), so divide by 100
         let profitAmount: number
         if (result === 'win') {
-          profitAmount = trade.stake_amount * trade.profit_rate
+          profitAmount = trade.stake_amount * (trade.profit_rate / 100)
         } else {
           profitAmount = -trade.stake_amount
         }
 
-        console.log(`Processing trade ${trade.id}: decision=${trade.decision}, result=${result}, profit=${profitAmount}`)
+        console.log(`Processing trade ${trade.id}: decision=${trade.decision}, result=${result}, profit_rate=${trade.profit_rate}%, profit=${profitAmount}`)
 
         // Update the trade
         const { error: updateError } = await supabase
@@ -69,6 +70,19 @@ serve(async (req) => {
           console.error(`Error updating trade ${trade.id}:`, updateError)
           results.push({ tradeId: trade.id, success: false, error: updateError.message })
           continue
+        }
+
+        // Delete the position from positions_orders after trade completes
+        const { error: positionDeleteError } = await supabase
+          .from('positions_orders')
+          .delete()
+          .eq('trade_id', trade.id)
+
+        if (positionDeleteError) {
+          console.error(`Error deleting position for trade ${trade.id}:`, positionDeleteError)
+          // Continue anyway, position cleanup is not critical
+        } else {
+          console.log(`Position deleted for trade ${trade.id}`)
         }
 
         // Update user balance for win (stake was already deducted on trade creation)
