@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, Eye, EyeOff, LogOut } from 'lucide-react';
+import { Loader2, Shield, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const AdminAuth = () => {
   const { t } = useTranslation();
-  const { user, loading, signIn, signUp, signOut, adminStatusChecking, isAdmin } = useAuth();
+  const { user, loading, signIn, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -23,51 +23,16 @@ const AdminAuth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
 
-  // Show loading while auth is loading or checking admin status
-  // Timeout is now handled in AuthContext, so we just check the flags
-  if (loading || adminStatusChecking) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Verifying credentials...</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  // Redirect if user is logged in AND confirmed as admin
-  if (user && isAdmin) {
+  if (user) {
     return <Navigate to="/admin" replace />;
-  }
-
-  // User is logged in but NOT an admin - show clear message
-  if (user && !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-destructive">
-              <Shield className="h-6 w-6 text-destructive-foreground" />
-            </div>
-            <CardTitle className="text-2xl">Access Denied</CardTitle>
-            <CardDescription>
-              You are logged in as <strong>{user.email}</strong> but this account does not have admin privileges.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button 
-              onClick={signOut} 
-              variant="outline" 
-              className="w-full"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out & Try Different Account
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
   }
 
   const handleSignIn = async (e: React.FormEvent) => {

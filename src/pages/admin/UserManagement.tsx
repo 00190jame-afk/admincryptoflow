@@ -1,43 +1,85 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAdminUsers, User } from '@/hooks/admin/useAdminData';
+import { supabase } from '@/integrations/supabase/client';
+import { notificationAudio } from '@/lib/NotificationAudio';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, Eye, Globe, Wallet, Monitor } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
+interface User {
+  id: string;
+  user_id: string;
+  email: string | null;
+  username: string | null;
+  credit_score: number | null;
+  wallet_address: string | null;
+  ip_address: string | null;
+  ip_country: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
 const UserManagement = () => {
   const { t } = useTranslation();
-  const { data: users = [], isLoading } = useAdminUsers();
+  const { isSuperAdmin } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newUserIds, setNewUserIds] = useState<Set<string>>(new Set());
-  const queryClient = useQueryClient();
 
-  // Track new users from real-time updates
   useEffect(() => {
-    const previousUsers = queryClient.getQueryData<User[]>(['admin', 'users']) || [];
-    const newIds = users
-      .filter(u => !previousUsers.find(pu => pu.id === u.id))
-      .map(u => u.id);
+    fetchUsers();
     
-    if (newIds.length > 0) {
-      setNewUserIds(prev => new Set([...prev, ...newIds]));
-      // Auto-remove highlight after 30 seconds
-      setTimeout(() => {
-        setNewUserIds(prev => {
-          const newSet = new Set(prev);
-          newIds.forEach(id => newSet.delete(id));
-          return newSet;
-        });
-      }, 30000);
+    const channel = supabase.channel('profiles-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, (payload) => {
+        const newUser = payload.new as User;
+        setUsers(prev => [newUser, ...prev]);
+        setNewUserIds(prev => new Set([...prev, newUser.id]));
+        notificationAudio.play();
+        setTimeout(() => {
+          setNewUserIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(newUser.id);
+            return newSet;
+          });
+        }, 30000);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      let profilesQuery = supabase.from('profiles').select('id, user_id, email, username, credit_score, wallet_address, ip_address, ip_country, user_agent, created_at');
+
+      if (!isSuperAdmin) {
+        const { data: assignedUsers } = await supabase.rpc('get_admin_assigned_users', { p_admin_user_id: (await supabase.auth.getUser()).data.user?.id });
+        if (assignedUsers && assignedUsers.length > 0) {
+          profilesQuery = profilesQuery.in('user_id', assignedUsers.map((u: any) => u.user_id));
+        } else {
+          setUsers([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const { data: profiles, error } = await profilesQuery.order('created_at', { ascending: false });
+      if (error) throw error;
+      setUsers(profiles || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [users, queryClient]);
+  };
 
   const filteredUsers = users.filter(user =>
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -99,7 +141,7 @@ const UserManagement = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {loading ? (
                   <TableRow><TableCell colSpan={9} className="text-center">{t('users.loadingUsers')}</TableCell></TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow><TableCell colSpan={9} className="text-center">{t('users.noUsers')}</TableCell></TableRow>

@@ -451,16 +451,13 @@ export type Database = {
           completed_at: string | null
           created_at: string
           current_price: number | null
-          decision: string | null
           direction: string
           email: string | null
           ends_at: string | null
           entry_price: number
-          execute_at: string | null
           id: string
           leverage: number
           modified_by_admin: boolean
-          previous_status: string | null
           profit_loss_amount: number | null
           profit_rate: number
           result: string | null
@@ -475,16 +472,13 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           current_price?: number | null
-          decision?: string | null
           direction: string
           email?: string | null
           ends_at?: string | null
           entry_price: number
-          execute_at?: string | null
           id?: string
           leverage: number
           modified_by_admin?: boolean
-          previous_status?: string | null
           profit_loss_amount?: number | null
           profit_rate: number
           result?: string | null
@@ -499,16 +493,13 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           current_price?: number | null
-          decision?: string | null
           direction?: string
           email?: string | null
           ends_at?: string | null
           entry_price?: number
-          execute_at?: string | null
           id?: string
           leverage?: number
           modified_by_admin?: boolean
-          previous_status?: string | null
           profit_loss_amount?: number | null
           profit_rate?: number
           result?: string | null
@@ -714,7 +705,6 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: string
       }
-      execute_pending_trades: { Args: never; Returns: undefined }
       generate_invite_code: { Args: never; Returns: string }
       generate_recharge_code: { Args: never; Returns: string }
       get_admin_assigned_users: {

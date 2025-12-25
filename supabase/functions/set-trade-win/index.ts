@@ -66,21 +66,21 @@ serve(async (req) => {
       throw new Error('Trade ID is required')
     }
 
-    console.log('Setting trade decision as WIN:', tradeId)
-
-    // Get the trade first to check current status
-    const { data: trade, error: tradeError } = await supabaseService
-      .from('trades')
-      .select('user_id, status, decision')
-      .eq('id', tradeId)
-      .single()
-
-    if (tradeError || !trade) {
-      throw new Error('Trade not found')
-    }
+    console.log('Setting trade as win:', tradeId)
 
     // For regular admins, check if they have permission for this user's trade
     if (adminProfile.role !== 'super_admin') {
+      // Get trade to check user_id
+      const { data: trade, error: tradeError } = await supabaseService
+        .from('trades')
+        .select('user_id')
+        .eq('id', tradeId)
+        .single()
+
+      if (tradeError || !trade) {
+        throw new Error('Trade not found')
+      }
+
       // Check if this admin has permission for this user (through assigned invite codes)
       const { data: assignedUsers, error: assignedError } = await supabaseService
         .rpc('get_admin_assigned_users', { p_admin_user_id: user.id })
@@ -100,18 +100,16 @@ serve(async (req) => {
       }
     }
 
-    // Only set decision, don't change status immediately
-    // The execute_at will be set automatically by the trigger (3-5 minutes from now)
+    // Update trade using service role to bypass RLS
     const { data, error } = await supabaseService
       .from('trades')
       .update({
-        decision: 'win',
-        previous_status: trade.status,
-        modified_by_admin: true,
+        status: 'win',
+        result: 'win',
       })
       .eq('id', tradeId)
-      .eq('status', 'pending') // Only update pending trades
-      .select('id, decision, execute_at, status')
+      .eq('status', 'pending')
+      .select('id, status, result')
       .maybeSingle()
 
     if (error) {
@@ -121,19 +119,15 @@ serve(async (req) => {
 
     if (!data) {
       return new Response(
-        JSON.stringify({ error: 'Trade not updated. It may no longer be pending or already has a decision.' }),
+        JSON.stringify({ error: 'Trade not updated. It may no longer be pending.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('Trade decision set successfully:', data)
+    console.log('Trade updated successfully:', data)
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        data,
-        message: `Trade decision set to WIN. Will execute at ${data.execute_at}`
-      }),
+      JSON.stringify({ success: true, data }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
