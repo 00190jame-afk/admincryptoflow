@@ -124,8 +124,8 @@ serve(async (req) => {
 
       console.log('Found positions:', positions?.length || 0)
 
-      // Step 2: Calculate profit amount
-      const profitAmount = trade.stake_amount * (trade.profit_rate || 0.85)
+      // Step 2: Calculate profit amount (profit_rate is stored as percentage, e.g. 30 = 30%)
+      const profitAmount = trade.stake_amount * ((trade.profit_rate || 85) / 100)
       const totalPayout = trade.stake_amount + profitAmount
 
       console.log('Profit calculation:', { 
