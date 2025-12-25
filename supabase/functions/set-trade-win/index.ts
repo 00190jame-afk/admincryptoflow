@@ -68,20 +68,23 @@ serve(async (req) => {
 
     console.log('Setting trade as win:', tradeId)
 
+    // Get the full trade details
+    const { data: trade, error: tradeError } = await supabaseService
+      .from('trades')
+      .select('*')
+      .eq('id', tradeId)
+      .eq('status', 'pending')
+      .single()
+
+    if (tradeError || !trade) {
+      return new Response(
+        JSON.stringify({ error: 'Trade not found or not pending' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // For regular admins, check if they have permission for this user's trade
     if (adminProfile.role !== 'super_admin') {
-      // Get trade to check user_id
-      const { data: trade, error: tradeError } = await supabaseService
-        .from('trades')
-        .select('user_id')
-        .eq('id', tradeId)
-        .single()
-
-      if (tradeError || !trade) {
-        throw new Error('Trade not found')
-      }
-
-      // Check if this admin has permission for this user (through assigned invite codes)
       const { data: assignedUsers, error: assignedError } = await supabaseService
         .rpc('get_admin_assigned_users', { p_admin_user_id: user.id })
 
@@ -100,36 +103,154 @@ serve(async (req) => {
       }
     }
 
-    // Update trade using service role to bypass RLS
-    const { data, error } = await supabaseService
-      .from('trades')
-      .update({
-        status: 'win',
-        result: 'win',
+    const now = new Date()
+    const endsAt = trade.ends_at ? new Date(trade.ends_at) : null
+
+    // Check if trade period has ended
+    if (endsAt && now >= endsAt) {
+      // Finalize immediately - trade period is over
+      console.log('Trade period ended, finalizing WIN immediately')
+      
+      // Step 1: Get positions for this trade
+      const { data: positions, error: posError } = await supabaseService
+        .from('positions_orders')
+        .select('*')
+        .eq('trade_id', tradeId)
+
+      if (posError) {
+        console.error('Error fetching positions:', posError)
+        throw new Error('Failed to fetch positions')
+      }
+
+      console.log('Found positions:', positions?.length || 0)
+
+      // Step 2: Calculate profit amount
+      const profitAmount = trade.stake_amount * (trade.profit_rate || 0.85)
+      const totalPayout = trade.stake_amount + profitAmount
+
+      console.log('Profit calculation:', { 
+        stake: trade.stake_amount, 
+        profitRate: trade.profit_rate, 
+        profitAmount, 
+        totalPayout 
       })
-      .eq('id', tradeId)
-      .eq('status', 'pending')
-      .select('id, status, result')
-      .maybeSingle()
 
-    if (error) {
-      console.error('Error updating trade:', error)
-      throw new Error(`Failed to update trade: ${error.message}`)
-    }
+      // Step 3: Create closing orders from positions
+      if (positions && positions.length > 0) {
+        const closingOrders = positions.map(po => ({
+          user_id: po.user_id,
+          symbol: po.symbol,
+          side: po.side,
+          leverage: po.leverage,
+          entry_price: po.entry_price,
+          exit_price: trade.current_price || po.mark_price || po.entry_price,
+          quantity: po.quantity,
+          realized_pnl: Math.round(profitAmount * 100) / 100,
+          original_trade_id: tradeId,
+          stake: po.stake,
+          scale: po.scale
+        }))
 
-    if (!data) {
+        const { error: closeError } = await supabaseService
+          .from('closing_orders')
+          .insert(closingOrders)
+
+        if (closeError) {
+          console.error('Error creating closing orders:', closeError)
+          throw new Error('Failed to create closing orders')
+        }
+
+        console.log('Created closing orders:', closingOrders.length)
+
+        // Step 4: Delete positions
+        const { error: deleteError } = await supabaseService
+          .from('positions_orders')
+          .delete()
+          .eq('trade_id', tradeId)
+
+        if (deleteError) {
+          console.error('Error deleting positions:', deleteError)
+          throw new Error('Failed to delete positions')
+        }
+
+        console.log('Deleted positions')
+      }
+
+      // Step 5: Pay user (stake was already deducted, now return stake + profit)
+      const { error: balanceError } = await supabaseService
+        .rpc('update_user_balance', {
+          p_user_id: trade.user_id,
+          p_amount: totalPayout,
+          p_transaction_type: 'system_trade',
+          p_description: 'Trade win payout',
+          p_trade_id: tradeId
+        })
+
+      if (balanceError) {
+        console.error('Error updating balance:', balanceError)
+        throw new Error('Failed to update user balance')
+      }
+
+      console.log('User balance updated with payout:', totalPayout)
+
+      // Step 6: Mark trade as complete
+      const { data: updatedTrade, error: updateError } = await supabaseService
+        .from('trades')
+        .update({
+          status: 'win',
+          result: 'win',
+          decision: 'win',
+          profit_loss_amount: profitAmount,
+          completed_at: new Date().toISOString(),
+          status_indicator: '⚪️ COMPLETED'
+        })
+        .eq('id', tradeId)
+        .select('id, status, result, profit_loss_amount, completed_at')
+        .single()
+
+      if (updateError) {
+        console.error('Error updating trade:', updateError)
+        throw new Error(`Failed to update trade: ${updateError.message}`)
+      }
+
+      console.log('Trade finalized as WIN:', updatedTrade)
+
       return new Response(
-        JSON.stringify({ error: 'Trade not updated. It may no longer be pending.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, data: updatedTrade, finalized: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+
+    } else {
+      // Trade period not over yet - just set decision, don't finalize
+      console.log('Trade period not ended yet, setting decision=win only')
+      
+      const { data: updatedTrade, error: updateError } = await supabaseService
+        .from('trades')
+        .update({
+          decision: 'win',
+          status_indicator: '🟢 WIN PENDING'
+        })
+        .eq('id', tradeId)
+        .select('id, decision, status_indicator, ends_at')
+        .single()
+
+      if (updateError) {
+        console.error('Error updating trade decision:', updateError)
+        throw new Error(`Failed to update trade: ${updateError.message}`)
+      }
+
+      console.log('Trade decision set to WIN (pending finalization at ends_at):', updatedTrade)
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          data: updatedTrade, 
+          finalized: false,
+          message: `Trade will be finalized as WIN when period ends at ${trade.ends_at}`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    console.log('Trade updated successfully:', data)
-
-    return new Response(
-      JSON.stringify({ success: true, data }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
 
   } catch (error) {
     console.error('Error in set-trade-win function:', error)
