@@ -26,6 +26,7 @@ interface Trade {
   current_price?: number;
   status: string;
   result?: string;
+  decision?: string;
   profit_loss_amount?: number;
   created_at: string;
   ends_at?: string;
@@ -96,7 +97,7 @@ const TradeManagement = () => {
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
     setDialogOpen(null);
-    setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: result, result } : t)));
+    setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, decision: result } : t)));
     toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
 
     try {
@@ -130,12 +131,15 @@ const TradeManagement = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (trade: Trade) => {
+    if (trade.decision === 'win' && trade.status === 'pending') {
+      return <Badge className="bg-yellow-100 text-yellow-800">{t('trades.winPending', 'WIN PENDING')}</Badge>;
+    }
+    switch (trade.status) {
       case 'pending': return <Badge variant="secondary">{t('trades.pending')}</Badge>;
       case 'win': return <Badge className="bg-green-100 text-green-800">{t('trades.win')}</Badge>;
       case 'lose': return <Badge variant="destructive">{t('trades.lose')}</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      default: return <Badge variant="outline">{trade.status}</Badge>;
     }
   };
 
@@ -211,7 +215,7 @@ const TradeManagement = () => {
                     <TableCell className="font-mono">${trade.stake_amount.toFixed(2)}</TableCell>
                     <TableCell>{trade.leverage}x</TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">{getStatusIcon(trade.status)}{getStatusBadge(trade.status)}</div>
+                      <div className="flex items-center space-x-2">{getStatusIcon(trade.status)}{getStatusBadge(trade)}</div>
                     </TableCell>
                     <TableCell>
                       {trade.profit_loss_amount ? (
@@ -220,7 +224,7 @@ const TradeManagement = () => {
                     </TableCell>
                     <TableCell>{new Date(trade.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {trade.status === 'pending' && (
+                      {trade.status === 'pending' && !trade.decision && (
                         <Dialog open={dialogOpen === trade.id} onOpenChange={(open) => setDialogOpen(open ? trade.id : null)}>
                           <DialogTrigger asChild><Button variant="outline" size="sm">{t('trades.setResult')}</Button></DialogTrigger>
                           <DialogContent>
