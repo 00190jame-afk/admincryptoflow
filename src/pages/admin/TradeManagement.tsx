@@ -98,16 +98,14 @@ const TradeManagement = () => {
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
     setDialogOpen(null);
     setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, decision: result } : t)));
-    toast({ title: t('common.processing'), description: `Setting trade as ${result.toUpperCase()}...` });
+    toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
 
     try {
       const { data, error } = await supabase.functions.invoke('set-trade-win', { body: { tradeId } });
       if (error || data?.error) {
         toast({ title: t('common.error'), description: error?.message || data?.error, variant: 'destructive' });
         fetchTrades();
-        return;
       }
-      toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
     } catch (error) {
       toast({ title: t('common.error'), description: 'An unexpected error occurred', variant: 'destructive' });
       fetchTrades();
