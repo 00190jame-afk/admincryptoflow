@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,8 +105,11 @@ const TradeManagement = () => {
   };
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
+    // Force synchronous UI update so "WIN PENDING" shows immediately
+    flushSync(() => {
+      setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, decision: result } : t)));
+    });
     setDialogOpen(null);
-    setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, decision: result } : t)));
     toast({ title: t('common.success'), description: `Trade marked as ${result.toUpperCase()} successfully` });
 
     try {
