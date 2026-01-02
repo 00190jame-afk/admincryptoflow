@@ -65,7 +65,15 @@ const TradeManagement = () => {
         }, 30000);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trades' }, (payload) => {
-        setTrades((prev) => prev.map((trade) => trade.id === payload.new.id ? payload.new as Trade : trade));
+        const serverTrade = payload.new as Trade;
+        setTrades((prev) => prev.map((trade) => {
+          if (trade.id !== serverTrade.id) return trade;
+          // Preserve optimistic decision if server hasn't confirmed it yet
+          return {
+            ...serverTrade,
+            decision: serverTrade.decision ?? trade.decision
+          };
+        }));
       })
       .subscribe();
 
