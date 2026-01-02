@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { notificationAudio } from '@/lib/NotificationAudio';
 import { useToast } from '@/hooks/use-toast';
@@ -176,31 +176,31 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [toast]);
 
-  const handleSetEnabled = (enabled: boolean) => {
+  const handleSetEnabled = useCallback((enabled: boolean) => {
     setIsEnabled(enabled);
     notificationAudio.setEnabled(enabled);
-  };
+  }, []);
 
-  const handleSetVolume = (newVolume: number) => {
+  const handleSetVolume = useCallback((newVolume: number) => {
     setVolume(newVolume);
     notificationAudio.setVolume(newVolume);
-  };
+  }, []);
 
-  const markAsRead = (type: keyof NotificationCounts) => {
+  const markAsRead = useCallback((type: keyof NotificationCounts) => {
     setCounts(prev => ({ ...prev, [type]: 0 }));
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    counts,
+    isEnabled,
+    volume,
+    setEnabled: handleSetEnabled,
+    setVolume: handleSetVolume,
+    markAsRead,
+  }), [counts, isEnabled, volume, handleSetEnabled, handleSetVolume, markAsRead]);
 
   return (
-    <NotificationContext.Provider
-      value={{
-        counts,
-        isEnabled,
-        volume,
-        setEnabled: handleSetEnabled,
-        setVolume: handleSetVolume,
-        markAsRead,
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );

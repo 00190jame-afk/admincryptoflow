@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,10 +47,13 @@ const TradeManagement = () => {
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
   const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
 
+  // Stable key for assignedUserIds to avoid effect re-runs
+  const assignedUserIdsKey = assignedUserIds.join(',');
+
+  // Fetch trades and subscribe to realtime - decoupled from markAsRead
   useEffect(() => {
     if (adminLoading) return;
     fetchTrades();
-    markAsRead('trades');
 
     const tradesChannel = supabase
       .channel('trades-realtime')
@@ -79,7 +82,16 @@ const TradeManagement = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(tradesChannel); };
-  }, [adminLoading, isSuperAdmin, assignedUserIds, markAsRead]);
+  }, [adminLoading, isSuperAdmin, assignedUserIdsKey]);
+
+  // Mark trades as read once on mount (separate effect to avoid refetch loop)
+  const hasMarkedRead = useRef(false);
+  useEffect(() => {
+    if (!adminLoading && !hasMarkedRead.current) {
+      markAsRead('trades');
+      hasMarkedRead.current = true;
+    }
+  }, [adminLoading, markAsRead]);
 
   const fetchTrades = async () => {
     try {
@@ -105,6 +117,7 @@ const TradeManagement = () => {
   };
 
   const updateTradeResult = async (tradeId: string, result: 'win' | 'lose') => {
+    setUpdating(tradeId);
     // Force synchronous UI update so "WIN PENDING" shows immediately
     flushSync(() => {
       setTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, decision: result } : t)));
@@ -121,6 +134,8 @@ const TradeManagement = () => {
     } catch (error) {
       toast({ title: t('common.error'), description: 'An unexpected error occurred', variant: 'destructive' });
       fetchTrades();
+    } finally {
+      setUpdating(null);
     }
   };
 
